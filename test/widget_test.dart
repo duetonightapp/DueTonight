@@ -6,7 +6,7 @@ void main() {
   testWidgets('App loads correctly', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: DueTonightApp(),
+        child: DueTonightApp(showSetup: true),
       ),
     );
     await tester.pumpAndSettle();

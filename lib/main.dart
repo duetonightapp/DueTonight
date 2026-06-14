@@ -87,7 +87,7 @@ class SetupScreen extends StatelessWidget {
       body: Container(
         color: Colors.black,
         child: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(28.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
