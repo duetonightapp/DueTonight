@@ -8,24 +8,30 @@ jobs:
     name: 🎉 iOS Build
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          architecture: x64
+          cache: true
+
       - run: flutter pub get
-      
 
-      - run: pod repo update
-        working-directory: ios
+      # NEW STEP: This strips out the Team Requirement before building
+      - name: Disable Apple Team Requirement
+        run: |
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
 
-      - run: flutter build ios --release --no-codesign
+      - name: Build iOS
+        # We add some extra flags here to force Xcode to behave
+        run: flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
 
-      - run: mkdir Payload
-        working-directory: build/ios/iphoneos
-
-      - run: mv Runner.app/ Payload
+      - name: Prepare Payload
+        run: |
+          mkdir -p Payload
+          mv Runner.app Payload/
         working-directory: build/ios/iphoneos
 
       - name: Zip output
@@ -37,6 +43,6 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/ios/iphoneos/FlutterIpaExport.ipa
-          tag: v1.0
+          tag: v1.0.${{ github.run_number }}
           overwrite: true
-          body: "This is first release"
+          body: "Unsigned build for testing. Remember to sign via AltStore/Sideloadly."
