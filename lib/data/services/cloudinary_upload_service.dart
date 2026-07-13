@@ -25,13 +25,14 @@ class CloudinaryUploadService {
     required String roomId,
     required String fileName,
     required void Function(double progress) onProgress,
+    String folder = 'assignments',
   }) async {
     // Clean file name to remove invalid characters
     final cleanFileName = fileName.replaceAll(RegExp(r'[^\w\.\-]'), '_');
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     // RLS policy checks split_part(name, '/', 2) to see if it is the room ID.
     // So the second segment MUST be the room ID.
-    final path = 'rooms/$roomId/assignments/${timestamp}_$cleanFileName';
+    final path = 'rooms/$roomId/$folder/${timestamp}_$cleanFileName';
 
     onProgress(0.1);
 
