@@ -47,3 +47,5 @@ app.*.map.json
 # Temporary test files
 /test.pdf
 
+.vercel
+.env*
