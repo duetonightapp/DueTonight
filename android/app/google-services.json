@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "63754572308",
+    "project_id": "duetonight",
+    "storage_bucket": "duetonight.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:63754572308:android:ecadc4f692810980f8cd01",
+        "android_client_info": {
+          "package_name": "com.college.due_tonight"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "63754572308-pn8uoavsl9sd50g76saqi3n6qtr3cdei.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGNtuSjaBY-B9dnh6RwqgUT_zsjQmi_is"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "63754572308-pn8uoavsl9sd50g76saqi3n6qtr3cdei.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

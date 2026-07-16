@@ -1,0 +1,37 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Profile {
+  id               String            @id @db.Uuid
+  email            String?
+  fullName         String?           @map("full_name")
+  avatarUrl        String?           @map("avatar_url")
+  batchId          String?           @db.Uuid @map("batch_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  assignments      Assignment[]
+
+  @@map("profiles")
+}
+
+model Assignment {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @db.Uuid @map("user_id")
+  title          String
+  description    String?
+  subject        String?
+  deadline       DateTime @db.Timestamptz
+  submissionMode String   @default("online") @map("submission_mode")
+  priority       String   @default("medium")
+  isCompleted    Boolean  @default(false) @map("is_completed")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  profile        Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assignments")
+}
