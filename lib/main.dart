@@ -6,8 +6,10 @@ import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'core/utils/url_strategy_helper.dart';
 
 void main() async {
+  configureUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   

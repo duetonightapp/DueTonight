@@ -1,7 +1,9 @@
-import 'dart:io';
+import 'dart:io' as io;
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,7 @@ import 'package:mime/mime.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/assignment_solution_model.dart';
 import '../../../data/models/room_attachment_model.dart';
@@ -29,6 +32,24 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
 
   Future<void> _downloadAndOpenFile(BuildContext context, RoomAttachment attachment) async {
     try {
+      if (kIsWeb) {
+        final urlUri = Uri.parse(attachment.fileUrl);
+        if (await canLaunchUrl(urlUri)) {
+          await launchUrl(urlUri, mode: LaunchMode.externalApplication);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Attachment opened in a new tab.'),
+              backgroundColor: AppTheme.safeColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          throw Exception("Could not open attachment link.");
+        }
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -50,12 +71,12 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
       );
 
       final dio = Dio();
-      Directory? downloadsDir;
+      io.Directory? downloadsDir;
       String? savePath;
 
       try {
-        if (Platform.isAndroid) {
-          downloadsDir = Directory('/storage/emulated/0/Download');
+        if (io.Platform.isAndroid) {
+          downloadsDir = io.Directory('/storage/emulated/0/Download');
           if (!await downloadsDir.exists()) {
             downloadsDir = await getExternalStorageDirectory();
           }
@@ -66,7 +87,7 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
             throw Exception("No external storage directory found");
           }
         } else {
-          if (Platform.isIOS) {
+          if (io.Platform.isIOS) {
             downloadsDir = await getApplicationDocumentsDirectory();
           } else {
             downloadsDir = await getDownloadsDirectory();
@@ -114,6 +135,24 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
     AssignmentSolution solution,
   ) async {
     try {
+      if (kIsWeb) {
+        final urlUri = Uri.parse(solution.fileUrl);
+        if (await canLaunchUrl(urlUri)) {
+          await launchUrl(urlUri, mode: LaunchMode.externalApplication);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Solution opened in a new tab.'),
+              backgroundColor: AppTheme.safeColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          throw Exception("Could not open solution link.");
+        }
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -135,12 +174,12 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
       );
 
       final dio = Dio();
-      Directory? downloadsDir;
+      io.Directory? downloadsDir;
       String? savePath;
 
       try {
-        if (Platform.isAndroid) {
-          downloadsDir = Directory('/storage/emulated/0/Download');
+        if (io.Platform.isAndroid) {
+          downloadsDir = io.Directory('/storage/emulated/0/Download');
           if (!await downloadsDir.exists()) {
             downloadsDir = await getExternalStorageDirectory();
           }
@@ -151,7 +190,7 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
             throw Exception('No external storage directory found');
           }
         } else {
-          if (Platform.isIOS) {
+          if (io.Platform.isIOS) {
             downloadsDir = await getApplicationDocumentsDirectory();
           } else {
             downloadsDir = await getDownloadsDirectory();
@@ -199,24 +238,37 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
         type: FileType.custom,
         allowedExtensions: ['pdf', 'doc', 'docx'],
       );
-      if (result == null || result.files.single.path == null) return;
+      if (result == null) return;
 
-      final filePath = result.files.single.path!;
-      final file = File(filePath);
-      final lowerPath = filePath.toLowerCase();
-      final mimeType = lookupMimeType(filePath) ??
-          (lowerPath.endsWith('.docx')
+      final file = result.files.single;
+      final fileName = file.name;
+      final lowerName = fileName.toLowerCase();
+      final mimeType = lookupMimeType(fileName) ??
+          (lowerName.endsWith('.docx')
               ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-              : lowerPath.endsWith('.doc')
+              : lowerName.endsWith('.doc')
                   ? 'application/msword'
                   : 'application/pdf');
-      final size = await file.length();
+
+      final Uint8List bytes;
+      final int size;
+      if (kIsWeb) {
+        if (file.bytes == null) return;
+        bytes = file.bytes!;
+        size = bytes.length;
+      } else {
+        if (file.path == null) return;
+        final ioFile = io.File(file.path!);
+        bytes = await ioFile.readAsBytes();
+        size = bytes.length;
+      }
+
       final isSupportedDocument = mimeType == 'application/pdf' ||
           mimeType == 'application/msword' ||
           mimeType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-          lowerPath.endsWith('.doc') ||
-          lowerPath.endsWith('.docx') ||
-          lowerPath.endsWith('.pdf');
+          lowerName.endsWith('.doc') ||
+          lowerName.endsWith('.docx') ||
+          lowerName.endsWith('.pdf');
 
       if (!isSupportedDocument) {
         if (!context.mounted) return;
@@ -263,9 +315,9 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
 
       final uploadService = ref.read(cloudinaryUploadServiceProvider);
       final uploadResult = await uploadService.uploadFile(
-        file: file,
+        fileBytes: bytes,
         roomId: roomId,
-        fileName: p.basename(filePath),
+        fileName: fileName,
         folder: 'solutions',
         onProgress: (_) {},
       );
@@ -273,7 +325,7 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
       await ref.read(assignmentSolutionRepositoryProvider).createSolution(
         roomId: roomId,
         assignmentId: assignmentId,
-        fileName: p.basename(filePath),
+        fileName: fileName,
         fileUrl: uploadResult.url,
         fileType: mimeType,
       );

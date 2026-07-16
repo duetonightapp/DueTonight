@@ -14,7 +14,9 @@ import '../../providers/auth_provider.dart';
 import '../../../data/models/room_assignment_model.dart';
 import '../../../data/models/room_announcement_model.dart';
 import '../../widgets/room_assignment_card.dart';
-import 'dart:io';
+import '../../widgets/responsive_container.dart';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
@@ -53,6 +55,10 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     final role = ref.watch(currentRoomRoleProvider(widget.roomId));
     final canPost = role == 'owner' || role == 'moderator';
     final canDelete = role == 'owner' || role == 'moderator';
+
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 768;
+    final isDesktop = width >= 1024;
 
     return roomAsync.when(
       data: (room) {
@@ -135,34 +141,83 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           ),
           body: Container(
             color: Colors.black,
-            child: PageView(
-              controller: _pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
+            child: Row(
               children: [
-                _RoomHomeTab(
-                  roomId: widget.roomId,
-                  onSwitchTab: (index) {
-                    _pageController.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                ),
-                _RoomAssignmentsTab(roomId: widget.roomId),
-                _RoomAnnouncementsTab(
-                  roomId: widget.roomId,
-                  onSwitchTab: (index) {
-                    _pageController.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
+                if (!isMobile) ...[
+                  NavigationRail(
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: (index) {
+                      _pageController.animateToPage(
+                        index,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                    backgroundColor: AppTheme.surfaceColor,
+                    extended: isDesktop,
+                    labelType: isDesktop ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+                    unselectedIconTheme: IconThemeData(color: Colors.white.withOpacity(0.4)),
+                    selectedIconTheme: const IconThemeData(color: AppTheme.secondaryColor),
+                    unselectedLabelTextStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                    selectedLabelTextStyle: const TextStyle(color: AppTheme.secondaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                    destinations: const [
+                      NavigationRailDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
+                        label: Text('Home'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.assignment_outlined),
+                        selectedIcon: Icon(Icons.assignment_rounded),
+                        label: Text('Assignments'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.campaign_outlined),
+                        selectedIcon: Icon(Icons.campaign_rounded),
+                        label: Text('Announcements'),
+                      ),
+                    ],
+                  ),
+                  const VerticalDivider(thickness: 1, width: 1, color: Colors.white10),
+                ],
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                      });
+                    },
+                    children: [
+                      ResponsiveContainer(
+                        child: _RoomHomeTab(
+                          roomId: widget.roomId,
+                          onSwitchTab: (index) {
+                            _pageController.animateToPage(
+                              index,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          },
+                        ),
+                      ),
+                      ResponsiveContainer(
+                        child: _RoomAssignmentsTab(roomId: widget.roomId),
+                      ),
+                      ResponsiveContainer(
+                        child: _RoomAnnouncementsTab(
+                          roomId: widget.roomId,
+                          onSwitchTab: (index) {
+                            _pageController.animateToPage(
+                              index,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -190,7 +245,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                   child: const Icon(Icons.add_rounded, size: 28),
                 )
               : null,
-          bottomNavigationBar: _buildBottomNavBar(context),
+          bottomNavigationBar: isMobile ? _buildBottomNavBar(context) : null,
         );
       },
       loading: () =>
@@ -1990,7 +2045,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
   String? _selectedSubjectName;
   DateTime? _deadline;
   bool _isLoading = false;
-  final List<File> _selectedFiles = [];
+  final List<PlatformFile> _selectedFiles = [];
 
   @override
   void dispose() {
@@ -2004,8 +2059,8 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     final result = await picker.pickImage(source: ImageSource.gallery);
     if (result == null) return;
     
-    final file = File(result.path);
-    final size = await file.length();
+    final bytes = await result.readAsBytes();
+    final size = bytes.length;
     if (size > 5 * 1024 * 1024) {
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
@@ -2018,7 +2073,12 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     }
 
     setState(() {
-      _selectedFiles.add(file);
+      _selectedFiles.add(PlatformFile(
+        name: result.name,
+        size: size,
+        bytes: bytes,
+        path: kIsWeb ? null : result.path,
+      ));
     });
   }
 
@@ -2026,11 +2086,10 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
     );
-    if (result == null || result.files.single.path == null) return;
+    if (result == null) return;
     
-    final pathStr = result.files.single.path!;
-    final file = File(pathStr);
-    final ext = p.extension(pathStr).toLowerCase().replaceFirst('.', '');
+    final file = result.files.single;
+    final ext = p.extension(file.name).toLowerCase().replaceFirst('.', '');
     
     if (!['pdf', 'jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
       _messengerKey.currentState?.showSnackBar(
@@ -2043,7 +2102,19 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
       return;
     }
 
-    final size = await file.length();
+    final Uint8List bytes;
+    final int size;
+    if (kIsWeb) {
+      if (file.bytes == null) return;
+      bytes = file.bytes!;
+      size = bytes.length;
+    } else {
+      if (file.path == null) return;
+      final ioFile = io.File(file.path!);
+      bytes = await ioFile.readAsBytes();
+      size = bytes.length;
+    }
+
     if (size > 5 * 1024 * 1024) {
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
@@ -2056,7 +2127,12 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     }
 
     setState(() {
-      _selectedFiles.add(file);
+      _selectedFiles.add(PlatformFile(
+        name: file.name,
+        size: size,
+        bytes: bytes,
+        path: kIsWeb ? null : file.path,
+      ));
     });
   }
 
@@ -2099,11 +2175,11 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
         final attachmentRepo = ref.read(roomAttachmentRepositoryProvider);
 
         for (final file in _selectedFiles) {
-          final fileName = p.basename(file.path);
-          final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
+          final fileName = file.name;
+          final mimeType = lookupMimeType(fileName) ?? 'application/octet-stream';
 
           final uploadResult = await uploadService.uploadFile(
-            file: file,
+            fileBytes: file.bytes!,
             roomId: widget.roomId,
             fileName: fileName,
             onProgress: (_) {},
@@ -2424,7 +2500,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
                             itemCount: _selectedFiles.length,
                             itemBuilder: (context, index) {
                               final file = _selectedFiles[index];
-                              final fileName = p.basename(file.path);
+                              final fileName = file.name;
                               return ListTile(
                                 dense: true,
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),

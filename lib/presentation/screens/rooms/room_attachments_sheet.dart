@@ -1,7 +1,9 @@
-import 'dart:io';
+import 'dart:io' as io;
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,7 @@ import 'package:mime/mime.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/room_attachment_model.dart';
 import '../../providers/attachment_provider.dart';
@@ -68,10 +71,10 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
     return ['jpg', 'jpeg', 'png', 'webp', 'pdf'].contains(ext);
   }
 
-  Future<void> _uploadFile(File file) async {
+  Future<void> _uploadFile(PlatformFile file) async {
     if (_isUploading) return;
 
-    final fileName = p.basename(file.path);
+    final fileName = file.name;
     final extension = p.extension(fileName).replaceFirst('.', '');
     if (!_isAllowedExtension(extension)) {
       setState(() {
@@ -80,7 +83,7 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
       return;
     }
 
-    final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
+    final mimeType = lookupMimeType(fileName) ?? 'application/octet-stream';
 
     setState(() {
       _isUploading = true;
@@ -91,7 +94,7 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
     try {
       final uploadService = ref.read(cloudinaryUploadServiceProvider);
       final uploadResult = await uploadService.uploadFile(
-        file: file,
+        fileBytes: file.bytes!,
         roomId: widget.roomId,
         fileName: fileName,
         onProgress: (value) {
@@ -152,8 +155,8 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
     final result = await picker.pickImage(source: ImageSource.gallery);
     if (result == null) return;
 
-    final file = File(result.path);
-    final size = await file.length();
+    final bytes = await result.readAsBytes();
+    final size = bytes.length;
     if (size > 5 * 1024 * 1024) {
       setState(() {
         _error = 'File size exceeds the 5MB limit.';
@@ -168,7 +171,14 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
       return;
     }
 
-    await _uploadFile(file);
+    final platformFile = PlatformFile(
+      name: result.name,
+      size: size,
+      bytes: bytes,
+      path: kIsWeb ? null : result.path,
+    );
+
+    await _uploadFile(platformFile);
   }
 
   Future<void> _pickFile() async {
@@ -177,11 +187,10 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
     );
-    if (result == null || result.files.single.path == null) return;
+    if (result == null) return;
 
-    final pathStr = result.files.single.path!;
-    final file = File(pathStr);
-    final ext = p.extension(pathStr).toLowerCase().replaceFirst('.', '');
+    final file = result.files.single;
+    final ext = p.extension(file.name).toLowerCase().replaceFirst('.', '');
 
     if (!['pdf', 'jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
       setState(() {
@@ -197,7 +206,19 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
       return;
     }
 
-    final size = await file.length();
+    final Uint8List bytes;
+    final int size;
+    if (kIsWeb) {
+      if (file.bytes == null) return;
+      bytes = file.bytes!;
+      size = bytes.length;
+    } else {
+      if (file.path == null) return;
+      final ioFile = io.File(file.path!);
+      bytes = await ioFile.readAsBytes();
+      size = bytes.length;
+    }
+
     if (size > 5 * 1024 * 1024) {
       setState(() {
         _error = 'File size exceeds the 5MB limit.';
@@ -212,11 +233,36 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
       return;
     }
 
-    await _uploadFile(file);
+    final platformFile = PlatformFile(
+      name: file.name,
+      size: size,
+      bytes: bytes,
+      path: kIsWeb ? null : file.path,
+    );
+
+    await _uploadFile(platformFile);
   }
 
   Future<void> _downloadAttachment(RoomAttachment attachment) async {
     try {
+      if (kIsWeb) {
+        final urlUri = Uri.parse(attachment.fileUrl);
+        if (await canLaunchUrl(urlUri)) {
+          await launchUrl(urlUri, mode: LaunchMode.externalApplication);
+          if (!mounted) return;
+          _messengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text('Attachment opened in a new tab.'),
+              backgroundColor: AppTheme.safeColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          throw Exception("Could not open attachment link.");
+        }
+        return;
+      }
+
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Row(
@@ -238,12 +284,12 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
       );
 
       final dio = Dio();
-      Directory? downloadsDir;
+      io.Directory? downloadsDir;
       String? savePath;
 
       try {
-        if (Platform.isAndroid) {
-          downloadsDir = Directory('/storage/emulated/0/Download');
+        if (io.Platform.isAndroid) {
+          downloadsDir = io.Directory('/storage/emulated/0/Download');
           if (!await downloadsDir.exists()) {
             downloadsDir = await getExternalStorageDirectory();
           }
@@ -254,7 +300,7 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
             throw Exception("No external storage directory found");
           }
         } else {
-          if (Platform.isIOS) {
+          if (io.Platform.isIOS) {
             downloadsDir = await getApplicationDocumentsDirectory();
           } else {
             downloadsDir = await getDownloadsDirectory();

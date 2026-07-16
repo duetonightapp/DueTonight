@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,7 +21,7 @@ class CloudinaryUploadService {
       : _client = client ?? Supabase.instance.client;
 
   Future<CloudinaryUploadResult> uploadFile({
-    required File file,
+    required Uint8List fileBytes,
     required String roomId,
     required String fileName,
     required void Function(double progress) onProgress,
@@ -36,9 +36,9 @@ class CloudinaryUploadService {
 
     onProgress(0.1);
 
-    await _client.storage.from('room-files').upload(
+    await _client.storage.from('room-files').uploadBinary(
       path,
-      file,
+      fileBytes,
       fileOptions: const FileOptions(upsert: true),
     );
 

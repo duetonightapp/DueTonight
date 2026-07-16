@@ -74,7 +74,7 @@ class AuthNotifier extends StateNotifier<app.User?> {
       debugPrint('Starting Google Sign In');
 
       final redirectUrl = kIsWeb
-          ? '${Uri.base.origin}/auth/callback'
+          ? '${Uri.base.origin}/login-callback'
           : 'com.college.due-tonight://login-callback';
 
       await _client.auth.signInWithOAuth(
@@ -89,6 +89,36 @@ class AuthNotifier extends StateNotifier<app.User?> {
       rethrow;
     }
   }
+
+  Future<void> signInWithEmailAndPassword(String email, String password) async {
+    try {
+      debugPrint('Starting Email Sign In');
+      await _client.auth.signInWithPassword(
+        email: email.trim(),
+        password: password,
+      );
+      debugPrint('Email Sign In completed');
+    } catch (e) {
+      debugPrint('Email Sign in error: $e');
+      rethrow;
+    }
+  }
+
+  Future<AuthResponse> signUpWithEmailAndPassword(String email, String password) async {
+    try {
+      debugPrint('Starting Email Sign Up');
+      final response = await _client.auth.signUp(
+        email: email.trim(),
+        password: password,
+      );
+      debugPrint('Email Sign Up completed');
+      return response;
+    } catch (e) {
+      debugPrint('Email Sign Up error: $e');
+      rethrow;
+    }
+  }
+
 
   Future<void> signOut() async {
     await _client.auth.signOut();
