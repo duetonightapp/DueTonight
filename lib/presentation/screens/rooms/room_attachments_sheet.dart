@@ -83,7 +83,12 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
       return;
     }
 
-    final mimeType = lookupMimeType(fileName) ?? 'application/octet-stream';
+    final mimeType = lookupMimeType(fileName) ??
+        (fileName.toLowerCase().endsWith('.docx')
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : fileName.toLowerCase().endsWith('.doc')
+                ? 'application/msword'
+                : 'application/octet-stream');
 
     setState(() {
       _isUploading = true;
@@ -192,13 +197,13 @@ class _RoomAttachmentsSheetState extends ConsumerState<RoomAttachmentsSheet> {
     final file = result.files.single;
     final ext = p.extension(file.name).toLowerCase().replaceFirst('.', '');
 
-    if (!['pdf', 'jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
+    if (!['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'].contains(ext)) {
       setState(() {
-        _error = 'Unsupported file type. Please select a PDF or an Image.';
+        _error = 'Unsupported file type. Please select a PDF, Word Document, or an Image.';
       });
       _messengerKey.currentState?.showSnackBar(
         const SnackBar(
-          content: Text('Unsupported file type. Please select a PDF or an Image.'),
+          content: Text('Unsupported file type. Please select a PDF, Word Document, or an Image.'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),

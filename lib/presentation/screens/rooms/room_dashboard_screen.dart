@@ -2091,10 +2091,10 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     final file = result.files.single;
     final ext = p.extension(file.name).toLowerCase().replaceFirst('.', '');
     
-    if (!['pdf', 'jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
+    if (!['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'].contains(ext)) {
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
-          content: const Text('Unsupported file type. Please select a PDF or an Image.'),
+          content: const Text('Unsupported file type. Please select a PDF, Word Document, or Image.'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),

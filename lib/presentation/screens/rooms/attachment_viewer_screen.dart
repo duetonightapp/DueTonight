@@ -1,7 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../../data/models/room_attachment_model.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -15,6 +17,13 @@ class AttachmentViewerScreen extends StatelessWidget {
       attachment.fileName.toLowerCase().endsWith('.pdf');
 
   bool get _isImage => attachment.fileType.startsWith('image/');
+
+  bool get _isWord =>
+      attachment.fileType == 'application/msword' ||
+      attachment.fileType ==
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      attachment.fileName.toLowerCase().endsWith('.doc') ||
+      attachment.fileName.toLowerCase().endsWith('.docx');
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +57,89 @@ class AttachmentViewerScreen extends StatelessWidget {
                       ),
                     ),
                   )
-                : const Center(
-                    child: Text('Unsupported file type'),
-                  ),
+                : _isWord
+                    ? _WordPlaceholderAndDownloader(attachment: attachment)
+                    : const Center(
+                        child: Text(
+                          'Unsupported file type',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+      ),
+    );
+  }
+}
+
+class _WordPlaceholderAndDownloader extends StatelessWidget {
+  final RoomAttachment attachment;
+
+  const _WordPlaceholderAndDownloader({required this.attachment});
+
+  Future<void> _download() async {
+    final uri = Uri.parse(attachment.fileUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.description_rounded,
+                color: Colors.blue,
+                size: 72,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              attachment.fileName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Word Document',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _download,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.download_rounded),
+              label: const Text(
+                'Download Document',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
