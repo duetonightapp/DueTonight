@@ -89,10 +89,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/rooms/join',
-        pageBuilder: (context, state) => _buildPageWithTransition(
-          state: state,
-          child: const RoomJoinScreen(),
-        ),
+        pageBuilder: (context, state) {
+          final code = state.uri.queryParameters['code'];
+          return _buildPageWithTransition(
+            state: state,
+            child: RoomJoinScreen(initialCode: code),
+          );
+        },
       ),
       GoRoute(
         path: '/rooms/:roomId',

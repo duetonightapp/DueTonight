@@ -2848,34 +2848,23 @@ class _DetailRow extends StatelessWidget {
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: value));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('$label copied to clipboard!'),
-                          backgroundColor: AppTheme.primaryColor,
-                          duration: const Duration(seconds: 2),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(6.0),
-                      child: Icon(
-                        Icons.copy_rounded,
-                        size: 16,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      Share.share('Join my classroom room on DueTonight!\nRoom Code: $value');
+                    onTap: () async {
+                      final origin = kIsWeb ? Uri.base.origin : 'https://my.duetonight.app';
+                      final joinLink = '$origin/rooms/join?code=$value';
+                      await Clipboard.setData(ClipboardData(text: joinLink));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Join link copied to clipboard!'),
+                            backgroundColor: AppTheme.primaryColor,
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                      if (!kIsWeb) {
+                        await Share.share('Join my classroom room on DueTonight!\nLink: $joinLink');
+                      }
                     },
                     child: const Padding(
                       padding: EdgeInsets.all(6.0),
