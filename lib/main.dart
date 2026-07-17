@@ -12,6 +12,7 @@ void main() async {
   configureUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
+  await Hive.openBox<String>('auth_redirect');
   
   final hasValidConfig = AppConstants.supabaseUrl.startsWith('https://') &&
                          !AppConstants.supabaseUrl.contains('YOUR_');

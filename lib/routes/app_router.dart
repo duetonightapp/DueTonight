@@ -12,6 +12,7 @@ import '../presentation/screens/rooms/room_join_screen.dart';
 import '../presentation/screens/rooms/subject_assignments_screen.dart';
 import '../presentation/screens/rooms/room_assignment_detail_screen.dart';
 import '../presentation/screens/auth/splash_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class RiverpodRouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -43,7 +44,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isSetupNameRoute = state.matchedLocation == '/setup-name';
 
       if (!isLoggedIn && !isAuthRoute && !isCallbackRoute && !isSplashRoute) {
-        return '/login';
+        final target = state.uri.toString();
+        Hive.openBox<String>('auth_redirect').then((box) {
+          box.put('redirectTo', target);
+        });
+        return '/login?redirectTo=${Uri.encodeComponent(target)}';
       }
 
       if (isLoggedIn && needsName && !isSetupNameRoute && !isSplashRoute) {
@@ -53,6 +58,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isLoggedIn &&
           !needsName &&
           (isAuthRoute || isCallbackRoute || isSetupNameRoute)) {
+        String? redirectTo = state.uri.queryParameters['redirectTo'];
+
+        if (redirectTo == null || redirectTo.isEmpty) {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            final box = Hive.box<String>('auth_redirect');
+            redirectTo = box.get('redirectTo');
+            box.delete('redirectTo');
+          }
+        }
+
+        if (redirectTo != null && redirectTo.isNotEmpty) {
+          try {
+            return Uri.decodeComponent(redirectTo);
+          } catch (_) {
+            return redirectTo;
+          }
+        }
         return '/';
       }
 
