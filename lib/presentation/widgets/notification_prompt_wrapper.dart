@@ -18,25 +18,7 @@ class NotificationPromptWrapper extends ConsumerStatefulWidget {
 class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWrapper> {
   bool _hasPrompted = false;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _checkAndPrompt();
-  }
 
-  void _checkAndPrompt() {
-    if (!kIsWeb) return;
-    if (_hasPrompted) return;
-
-    final user = ref.watch(authStateProvider);
-    if (user != null && user.fullName.isNotEmpty) {
-      _hasPrompted = true;
-      // Delay to ensure the widget tree is fully mounted before showing dialog/toast
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _checkPermissionsAndShowPrompt(user.id);
-      });
-    }
-  }
 
   Future<void> _checkPermissionsAndShowPrompt(String userId) async {
     final status = await getNotificationPermissionStatus();
@@ -292,6 +274,15 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      final user = ref.watch(authStateProvider);
+      if (user != null && user.fullName.isNotEmpty && !_hasPrompted) {
+        _hasPrompted = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _checkPermissionsAndShowPrompt(user.id);
+        });
+      }
+    }
     return widget.child;
   }
 }
