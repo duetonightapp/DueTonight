@@ -7,4 +7,6 @@ class AppConstants {
   static const String backendUrl = 'http://10.0.2.2:3000';
   static const String cloudinaryCloudName = 'dbzl3odk6';
   static const String cloudinaryUploadPreset = 'duetonight_uploads';
+  static const String vapidPublicKey =
+      'BJD0k-xLMppRIu6ARcTQVCpO17S-ZVS-TW6AgyCDOqX7Lzl_yQY1v4eeWGodRHibzSGaodeYtjid8lSU2qKIDVI';
 }

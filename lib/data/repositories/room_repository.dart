@@ -1,5 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
 import '../models/room_model.dart';
 import '../models/room_member_model.dart';
 import '../models/room_assignment_model.dart';
@@ -231,7 +235,16 @@ class RoomRepository {
       'created_by': _client.auth.currentUser?.id,
     }).select().single();
 
-    return response['id'] as String;
+    final assignmentId = response['id'] as String;
+
+    _triggerNotification(
+      roomId: roomId,
+      type: 'assignment',
+      title: title,
+      details: description,
+    );
+
+    return assignmentId;
   }
 
   Future<void> createAnnouncement({
@@ -245,6 +258,64 @@ class RoomRepository {
       'body': body,
       'created_by': _client.auth.currentUser?.id,
     });
+
+    _triggerNotification(
+      roomId: roomId,
+      type: 'announcement',
+      title: title,
+      details: body,
+    );
+  }
+
+  Future<void> _triggerNotification({
+    required String roomId,
+    required String type,
+    required String title,
+    String? details,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    String uploaderName = 'Someone';
+    try {
+      final profileRes = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', userId)
+          .maybeSingle();
+      if (profileRes != null && profileRes['full_name'] != null) {
+        uploaderName = profileRes['full_name'] as String;
+      }
+    } catch (e) {
+      debugPrint('Error fetching uploader profile name: $e');
+    }
+
+    try {
+      String url = AppConstants.backendUrl + '/api/notifications/notify';
+      if (kIsWeb) {
+        final origin = Uri.base.origin;
+        if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
+          url = 'http://localhost:3000/api/notifications/notify';
+        } else if (AppConstants.backendUrl.contains('10.0.2.2')) {
+          url = '$origin/api/notifications/notify';
+        }
+      }
+
+      await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'roomId': roomId,
+          'type': type,
+          'title': title,
+          'details': details ?? '',
+          'uploaderName': uploaderName,
+          'uploaderId': userId,
+        }),
+      );
+    } catch (e) {
+      debugPrint('Error triggering push notification: $e');
+    }
   }
 
   Future<void> deleteRoom({required String roomId}) async {

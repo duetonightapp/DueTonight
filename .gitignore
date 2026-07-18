@@ -47,3 +47,6 @@ app.*.map.json
 # Temporary test files
 /test.pdf
 
+# Node.js backend
+backend/node_modules/
+backend/dist/

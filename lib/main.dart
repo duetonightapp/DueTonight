@@ -6,6 +6,7 @@ import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'presentation/widgets/notification_prompt_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,7 +73,9 @@ class _DueTonightAppState extends ConsumerState<DueTonightApp> {
         if (widget.showSetup) {
           return const SetupScreen();
         }
-        return child ?? const SizedBox();
+        return NotificationPromptWrapper(
+          child: child ?? const SizedBox(),
+        );
       },
     );
   }
