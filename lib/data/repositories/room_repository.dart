@@ -291,15 +291,9 @@ class RoomRepository {
     }
 
     try {
-      String url = AppConstants.backendUrl + '/api/notifications/notify';
-      if (kIsWeb) {
-        final origin = Uri.base.origin;
-        if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
-          url = 'http://localhost:3000/api/notifications/notify';
-        } else if (AppConstants.backendUrl.contains('10.0.2.2')) {
-          url = '$origin/api/notifications/notify';
-        }
-      }
+      // Use the web-specific backend URL on web, otherwise the native backend URL
+      final baseUrl = kIsWeb ? AppConstants.backendUrlWeb : AppConstants.backendUrl;
+      String url = '$baseUrl/api/notifications/notify';
 
       await http.post(
         Uri.parse(url),
@@ -387,7 +381,7 @@ class RoomRepository {
       }
     } catch (e) {
       // Log/ignore storage deletion failure to ensure DB deletion always proceeds
-      print('Failed to delete assignment attachments from storage: $e');
+      debugPrint('Failed to delete assignment attachments from storage: $e');
     }
 
     // 3. Delete attachments from DB
