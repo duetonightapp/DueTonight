@@ -1,63 +1,59 @@
-import 'dart:js_interop';
+// ignore_for_file: avoid_web_libraries_in_flutter
+import 'dart:js' as js;
+import 'dart:js_util' as js_util;
 import 'package:flutter/foundation.dart';
 
-/// Gets the current notification permission status via `Notification.permission`.
+/// Gets the current notification permission status.
 Future<String> getNotificationPermissionStatus() async {
   try {
-    final notification = globalThis.getProperty('Notification'.toJS);
-    if (notification.isNull || notification.isUndefined) return 'unsupported';
-
-    final permission = notification.getProperty('permission'.toJS);
-    final result = permission.dartify();
-    return (result is String) ? result : 'unsupported';
+    final push = js.context['dueTonightPush'];
+    if (push != null) {
+      final result = push.callMethod('getPermissionStatus') as String?;
+      return result ?? 'unsupported';
+    }
+    debugPrint('getNotificationPermissionStatus: dueTonightPush not found');
   } catch (e) {
     debugPrint('getNotificationPermissionStatus error: $e');
   }
   return 'unsupported';
 }
 
-/// Requests notification permission via `Notification.requestPermission()`.
+/// Requests notification permission.
 Future<String> requestNotificationPermission() async {
   try {
-    final notification = globalThis.getProperty('Notification'.toJS);
-    if (notification.isNull || notification.isUndefined) return 'denied';
-
-    final promise = notification.callMethod(
-      'requestPermission'.toJS,
-    ) as JSPromise<JSAny?>;
-    final result = await promise.toDart;
-    final permission = result?.dartify() as String? ?? 'denied';
-    return permission;
+    final push = js.context['dueTonightPush'];
+    if (push != null) {
+      final promise = push.callMethod('requestPermission');
+      final result = await js_util.promiseToFuture(promise);
+      return result as String? ?? 'denied';
+    }
+    debugPrint('requestNotificationPermission: dueTonightPush not found');
   } catch (e) {
     debugPrint('requestNotificationPermission error: $e');
   }
   return 'denied';
 }
 
-/// Subscribes the active service worker to push notifications via the
-/// `window.dueTonightPush.subscribeUser` helper defined in `index.html`.
+/// Subscribes the active service worker to push notifications.
 Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
   try {
-    final push = globalThis.getProperty('dueTonightPush'.toJS);
-    if (push.isNull || push.isUndefined) {
-      debugPrint('subscribeUserToPush: dueTonightPush not found in global scope');
+    final push = js.context['dueTonightPush'];
+    if (push == null) {
+      debugPrint('subscribeUserToPush: dueTonightPush not found');
       return null;
     }
 
-    final promise = push.callMethod(
-      'subscribeUser'.toJS,
-      publicVapidKey.toJS,
-    ) as JSPromise<JSAny?>;
-    final result = await promise.toDart;
+    final promise = push.callMethod('subscribeUser', [publicVapidKey]);
+    final result = await js_util.promiseToFuture(promise);
 
-    if (result == null || result.isNull || result.isUndefined) {
+    if (result == null) {
       debugPrint('subscribeUserToPush: subscribeUser returned null');
       return null;
     }
 
-    final endpoint = result.getProperty('endpoint'.toJS).dartify() as String?;
-    final p256dh = result.getProperty('p256dh'.toJS).dartify() as String?;
-    final auth = result.getProperty('auth'.toJS).dartify() as String?;
+    final endpoint = js_util.getProperty(result, 'endpoint') as String?;
+    final p256dh = js_util.getProperty(result, 'p256dh') as String?;
+    final auth = js_util.getProperty(result, 'auth') as String?;
 
     if (endpoint == null || p256dh == null || auth == null) {
       debugPrint('subscribeUserToPush: subscription data incomplete');
