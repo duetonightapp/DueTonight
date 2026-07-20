@@ -78,6 +78,10 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   }
 
   void _showPromptDialog(String userId) {
+    // Capture these BEFORE showDialog to avoid null context inside dialog builder
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -129,8 +133,8 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
                     Expanded(
                       child: TextButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(this.context).hideCurrentSnackBar();
+                          navigator.pop();
+                          messenger.hideCurrentSnackBar();
                         },
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -151,8 +155,8 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(this.context).hideCurrentSnackBar();
+                          navigator.pop();
+                          messenger.hideCurrentSnackBar();
                           _triggerPermissionRequest(userId);
                         },
                         style: ElevatedButton.styleFrom(
