@@ -3,38 +3,44 @@ import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'package:flutter/foundation.dart';
 
-/// Gets the current notification permission status.
+/// Gets the current notification permission status by reading the browser's
+/// native `Notification.permission` directly. This is more reliable than
+/// routing through [dueTonightPush] because [Notification] is a standard API.
 Future<String> getNotificationPermissionStatus() async {
   try {
-    final push = js.context['dueTonightPush'];
-    if (push != null) {
-      final result = push.callMethod('getPermissionStatus') as String?;
-      return result ?? 'unsupported';
+    final notificationCtor = js.context['Notification'];
+    if (notificationCtor != null) {
+      final permission = notificationCtor['permission'];
+      return (permission as String?) ?? 'unsupported';
     }
-    debugPrint('getNotificationPermissionStatus: dueTonightPush not found');
+    debugPrint('getNotificationPermissionStatus: Notification API not found');
   } catch (e) {
     debugPrint('getNotificationPermissionStatus error: $e');
   }
   return 'unsupported';
 }
 
-/// Requests notification permission.
+/// Requests notification permission via the browser's native
+/// `Notification.requestPermission()`.
 Future<String> requestNotificationPermission() async {
   try {
-    final push = js.context['dueTonightPush'];
-    if (push != null) {
-      final promise = push.callMethod('requestPermission');
+    final notificationCtor = js.context['Notification'];
+    if (notificationCtor != null) {
+      final promise = notificationCtor.callMethod('requestPermission');
       final result = await js_util.promiseToFuture(promise);
-      return result as String? ?? 'denied';
+      return (result as String?) ?? 'denied';
     }
-    debugPrint('requestNotificationPermission: dueTonightPush not found');
+    debugPrint('requestNotificationPermission: Notification API not found');
   } catch (e) {
     debugPrint('requestNotificationPermission error: $e');
   }
   return 'denied';
 }
 
-/// Subscribes the active service worker to push notifications.
+/// Subscribes the active service worker to push notifications via the
+/// `window.dueTonightPush.subscribeUser` helper defined in `index.html`.
+/// This still needs the custom helper because the Push subscription API
+/// requires the VAPID key and service worker integration.
 Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
   try {
     final push = js.context['dueTonightPush'];
