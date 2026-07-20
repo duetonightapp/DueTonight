@@ -1,18 +1,37 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
-import 'dart:js' as js;
+import 'dart:js_interop';
+import 'package:js/js.dart';
 import 'package:flutter/foundation.dart';
 
-/// Gets the current notification permission status by reading the browser's
-/// native `Notification.permission` directly via dart:js.
+// ── Type-safe JS interop bindings using package:js ──────────────────
+
+/// Access the browser's Notification constructor.
+@JS('Notification')
+external JSObject get _notificationCtor;
+
+/// Access the dueTonightPush helper object defined in index.html.
+@JS('dueTonightPush')
+external DueTonightPushHelper get _dueTonightPush;
+
+/// Typed binding for the dueTonightPush JS object.
+@JS()
+@anonymous
+class DueTonightPushHelper {
+  external String getPermissionStatus();
+  external JSPromise requestPermission();
+  external JSPromise<JSObject?> subscribeUser(String publicVapidKey);
+
+  external factory DueTonightPushHelper();
+}
+
+// ── Public API ──────────────────────────────────────────────────────
+
+/// Reads the browser's native `Notification.permission` (granted / denied / default).
 Future<String> getNotificationPermissionStatus() async {
   try {
-    final notificationCtor = js.context['Notification'];
-    if (notificationCtor != null) {
-      final permission = notificationCtor['permission'];
-      return (permission as String?) ?? 'unsupported';
-    }
-    debugPrint('getNotificationPermissionStatus: Notification API not found');
+    final permission = _notificationCtor.getProperty('permission'.toJS);
+    return permission.dartify() as String? ?? 'unsupported';
   } catch (e) {
     debugPrint('getNotificationPermissionStatus error: $e');
   }
@@ -20,89 +39,51 @@ Future<String> getNotificationPermissionStatus() async {
 }
 
 /// Requests notification permission via `Notification.requestPermission()`.
-/// Uses pure dart:js interop (no dart:js_util mixing) with manual Promise
-/// handling through JS .then / .catch callbacks.
 Future<String> requestNotificationPermission() async {
   try {
-    final notificationCtor = js.context['Notification'];
-    if (notificationCtor == null) {
-      debugPrint('requestNotificationPermission: Notification API not found');
-      return 'denied';
-    }
-
-    final promise = notificationCtor.callMethod('requestPermission');
-    if (promise == null) return 'denied';
-
-    final completer = Completer<String>();
-    promise.callMethod('then', [
-      js.allowInterop((result) {
-        completer.complete(result as String? ?? 'denied');
-      }),
-    ]);
-    promise.callMethod('catch', [
-      js.allowInterop((error) {
-        debugPrint('requestNotificationPermission rejected: $error');
-        completer.complete('denied');
-      }),
-    ]);
-    return completer.future;
+    final promise = _notificationCtor.callMethod('requestPermission'.toJS);
+    final result = await (promise as JSPromise).toDart;
+    return result.dartify() as String? ?? 'denied';
   } catch (e) {
     debugPrint('requestNotificationPermission error: $e');
   }
   return 'denied';
 }
 
-/// Subscribes the active service worker to push notifications via
-/// `dueTonightPush.subscribeUser()`. Uses pure dart:js interop.
+/// Subscribes the active service worker to push notifications. Adds a
+/// 15-second timeout so the UI never hangs forever.
 Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
   try {
-    final push = js.context['dueTonightPush'];
-    if (push == null) {
-      debugPrint('subscribeUserToPush: dueTonightPush not found');
+    debugPrint('subscribeUserToPush: starting...');
+    final promise = _dueTonightPush.subscribeUser(publicVapidKey);
+    final result = await promise.toDart.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        debugPrint('subscribeUserToPush: TIMEOUT after 15s');
+        return null;
+      },
+    );
+
+    if (result == null || result.isNull || result.isUndefined) {
+      debugPrint('subscribeUserToPush: result was null/undefined');
       return null;
     }
 
-    final promise = push.callMethod('subscribeUser', [publicVapidKey]);
-    if (promise == null) {
-      debugPrint('subscribeUserToPush: subscribeUser returned null');
+    final endpoint = result.getProperty('endpoint'.toJS).dartify() as String?;
+    final p256dh = result.getProperty('p256dh'.toJS).dartify() as String?;
+    final auth = result.getProperty('auth'.toJS).dartify() as String?;
+
+    if (endpoint == null || p256dh == null || auth == null) {
+      debugPrint('subscribeUserToPush: incomplete data');
       return null;
     }
 
-    final completer = Completer<Map<String, String>?>();
-    promise.callMethod('then', [
-      js.allowInterop((result) {
-        if (result == null) {
-          debugPrint('subscribeUserToPush: result was null');
-          completer.complete(null);
-          return;
-        }
-
-        final endpoint = result['endpoint'] as String?;
-        final p256dh = result['p256dh'] as String?;
-        final auth = result['auth'] as String?;
-
-        if (endpoint == null || p256dh == null || auth == null) {
-          debugPrint('subscribeUserToPush: subscription data incomplete');
-          completer.complete(null);
-          return;
-        }
-
-        debugPrint('subscribeUserToPush: subscription obtained successfully');
-        completer.complete({
-          'endpoint': endpoint,
-          'p256dh': p256dh,
-          'auth': auth,
-        });
-      }),
-    ]);
-    promise.callMethod('catch', [
-      js.allowInterop((error) {
-        debugPrint('subscribeUserToPush rejected: $error');
-        completer.complete(null);
-      }),
-    ]);
-
-    return completer.future;
+    debugPrint('subscribeUserToPush: SUCCESS');
+    return {
+      'endpoint': endpoint,
+      'p256dh': p256dh,
+      'auth': auth,
+    };
   } catch (e) {
     debugPrint('subscribeUserToPush error: $e');
   }
