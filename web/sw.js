@@ -1,9 +1,11 @@
-// Import the Flutter service worker if it exists, to preserve offline/PWA caching.
-try {
-  importScripts('flutter_service_worker.js');
-} catch (e) {
-  console.log('Flutter service worker not loaded:', e);
-}
+// Take over immediately so the old self-destructing SW is replaced.
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 self.addEventListener('push', function(event) {
   let payload = {};
