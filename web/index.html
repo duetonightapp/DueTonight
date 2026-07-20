@@ -112,9 +112,38 @@
         });
       },
       subscribeWithCallback: function(publicVapidKey, onSuccess, onError) {
-        this.subscribeUser(publicVapidKey)
-          .then(function(result) { onSuccess(JSON.stringify(result)); })
-          .catch(function(err) { onError(err.message || String(err)); });
+        console.log('[Push] subscribeWithCallback called');
+        var self = this;
+        // Check service worker state first
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(function(reg) {
+            console.log('[Push] SW ready, state:', reg.active ? reg.active.state : 'no active');
+          }).catch(function(err) {
+            console.log('[Push] SW ready failed:', err);
+          });
+        } else {
+          console.log('[Push] no serviceWorker in navigator');
+        }
+        // Try subscription with timeout
+        var timedOut = false;
+        var timer = setTimeout(function() {
+          timedOut = true;
+          console.log('[Push] subscribeUser timed out after 30s (JS side)');
+          onError('JS-side timeout');
+        }, 30000);
+        self.subscribeUser(publicVapidKey)
+          .then(function(result) {
+            if (timedOut) return;
+            clearTimeout(timer);
+            console.log('[Push] subscribeUser resolved successfully');
+            onSuccess(JSON.stringify(result));
+          })
+          .catch(function(err) {
+            if (timedOut) return;
+            clearTimeout(timer);
+            console.log('[Push] subscribeUser rejected:', err.message || String(err));
+            onError(err.message || String(err));
+          });
       }
     };
   </script>
