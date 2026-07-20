@@ -49,7 +49,9 @@ Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
       return null;
     }
 
-    final promise = push.callMethod('subscribeUser', [publicVapidKey]);
+    // Use js_util.callMethod instead of push.callMethod because the latter
+    // doesn't properly return Promises from async JS functions.
+    final promise = js_util.callMethod(push, 'subscribeUser', [publicVapidKey]);
     final result = await js_util.promiseToFuture(promise);
 
     if (result == null) {
