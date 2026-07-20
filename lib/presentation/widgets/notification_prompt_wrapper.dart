@@ -28,8 +28,16 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
       if (!mounted) return;
 
       // Show Dialog and SnackBar (toast) at the same time
-      _showPromptDialog(userId);
-      _showPromptSnackBar(userId);
+      try {
+        _showPromptDialog(userId);
+      } catch (e, stack) {
+        debugPrint('Error showing prompt dialog: $e\n$stack');
+      }
+      try {
+        _showPromptSnackBar(userId);
+      } catch (e, stack) {
+        debugPrint('Error showing prompt snackbar: $e\n$stack');
+      }
     } else if (status == 'granted') {
       // If already granted, ensure the subscription is registered in the database
       _registerSubscriptionSilently(userId);
