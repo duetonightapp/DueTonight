@@ -101,6 +101,20 @@
           outputArray[i] = rawData.charCodeAt(i);
         }
         return outputArray;
+      },
+
+      // Callback-based helpers — avoid Promise interop issues
+      requestPermissionWithCallback: function(onResult) {
+        this.requestPermission().then(function(result) {
+          onResult(result);
+        }).catch(function(err) {
+          onResult('denied');
+        });
+      },
+      subscribeWithCallback: function(publicVapidKey, onSuccess, onError) {
+        this.subscribeUser(publicVapidKey)
+          .then(function(result) { onSuccess(JSON.stringify(result)); })
+          .catch(function(err) { onError(err.message || String(err)); });
       }
     };
   </script>
