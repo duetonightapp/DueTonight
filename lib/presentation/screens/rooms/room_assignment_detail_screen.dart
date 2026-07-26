@@ -640,61 +640,50 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
                         );
                       }
 
-                      final uploaderIds = solutions.map((s) => s.uploadedBy).toSet().toList();
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: solutions.length,
+                        itemBuilder: (context, index) {
+                          final solution = solutions[index];
+                          final timestamp = DateFormat('dd MMM yyyy, hh:mm a').format(solution.createdAt);
 
-                      return FutureBuilder<Map<String, Map<String, dynamic>>>(
-                        future: ref.read(roomRepositoryProvider).fetchProfiles(uploaderIds),
-                        builder: (context, snapshot) {
-                          final profiles = snapshot.data ?? {};
-
-                          return ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: solutions.length,
-                            itemBuilder: (context, index) {
-                              final solution = solutions[index];
-                              final profile = profiles[solution.uploadedBy];
-                              final uploaderName = profile?['full_name'] as String? ?? 'Member';
-                              final timestamp = DateFormat('dd MMM yyyy, hh:mm a').format(solution.createdAt);
-
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.cardColor,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    leading: const Icon(
-                                      Icons.picture_as_pdf_outlined,
-                                      color: AppTheme.primaryColor,
-                                    ),
-                                    title: Text(
-                                      solution.fileName,
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white.withOpacity(0.95),
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      '$uploaderName · $timestamp',
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white.withOpacity(0.4),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.download_outlined),
-                                      onPressed: () => _downloadAndOpenSolution(context, solution),
-                                    ),
-                                    onTap: () => _downloadAndOpenSolution(context, solution),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white.withOpacity(0.06)),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                leading: const Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  color: AppTheme.primaryColor,
+                                ),
+                                title: Text(
+                                  solution.fileName,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withOpacity(0.95),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
                                 ),
-                              );
-                            },
+                                subtitle: Text(
+                                  timestamp,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withOpacity(0.4),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.download_outlined),
+                                  onPressed: () => _downloadAndOpenSolution(context, solution),
+                                ),
+                                onTap: () => _downloadAndOpenSolution(context, solution),
+                              ),
+                            ),
                           );
                         },
                       );
