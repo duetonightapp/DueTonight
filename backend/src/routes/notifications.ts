@@ -40,14 +40,8 @@ router.post('/notify', async (req: Request, res: Response) => {
       return res.status(200).json({ status: 'No members in room' });
     }
 
-    // 2. Filter out the uploader
-    const recipientIds = members
-      .map((m) => m.user_id)
-      .filter((id) => id !== uploaderId);
-
-    if (recipientIds.length === 0) {
-      return res.status(200).json({ status: 'No recipients (only uploader is in the room)' });
-    }
+    // 2. Map recipient user IDs for all room members
+    const recipientIds = members.map((m) => m.user_id);
 
     // 3. Fetch push subscriptions for the recipients
     const subscriptions = await prisma.$queryRaw<{ id: string; user_id: string; endpoint: string; p256dh: string; auth: string }[]>`
