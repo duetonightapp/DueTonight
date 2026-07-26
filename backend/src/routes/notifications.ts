@@ -59,8 +59,17 @@ router.post('/notify', async (req: Request, res: Response) => {
     }
 
     // 4. Send push notifications
+    let notificationTitle = `${uploaderName} posted an update`;
+    if (type === 'assignment') {
+      notificationTitle = `New Assignment from ${uploaderName}`;
+    } else if (type === 'announcement') {
+      notificationTitle = `New Announcement from ${uploaderName}`;
+    } else if (type === 'solution') {
+      notificationTitle = `New Solution from ${uploaderName}`;
+    }
+
     const payload = JSON.stringify({
-      title: `${uploaderName} uploaded a new ${type}`,
+      title: notificationTitle,
       body: `${title}${details ? ': ' + details : ''}`,
       url: `/rooms/${roomId}`
     });
