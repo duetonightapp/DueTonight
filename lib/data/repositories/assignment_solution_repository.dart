@@ -111,11 +111,19 @@ class AssignmentSolutionRepository {
     }
 
     try {
-      // Use the web-specific backend URL on web, otherwise the native backend URL
-      final baseUrl = kIsWeb ? AppConstants.backendUrlWeb : AppConstants.backendUrl;
-      String url = '$baseUrl/api/notifications/notify';
+      String url;
+      if (kIsWeb) {
+        final origin = Uri.base.origin;
+        if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
+          url = '${AppConstants.backendUrlWeb}/api/notifications/notify';
+        } else {
+          url = '$origin/api/notifications/notify';
+        }
+      } else {
+        url = '${AppConstants.backendUrl}/api/notifications/notify';
+      }
 
-      await http.post(
+      final response = await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -127,6 +135,7 @@ class AssignmentSolutionRepository {
           'uploaderId': userId,
         }),
       );
+      debugPrint('Push notification solution response: ${response.statusCode} - ${response.body}');
     } catch (e) {
       debugPrint('Error triggering push notification: $e');
     }

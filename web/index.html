@@ -67,6 +67,20 @@
         return permission;
       },
       
+      arrayBufferToBase64: function(buffer) {
+        if (!buffer) return '';
+        var binary = '';
+        var bytes = new Uint8Array(buffer);
+        var len = bytes.byteLength;
+        for (var i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary)
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+      },
+
       subscribeUser: async function(publicVapidKey) {
         if (!('serviceWorker' in navigator)) {
           throw new Error('Service worker not supported');
@@ -82,11 +96,25 @@
           });
         }
         
-        const rawSubscription = JSON.parse(JSON.stringify(subscription));
+        const rawSubscription = JSON.parse(JSON.stringify(subscription || {}));
+        const p256dhBuffer = subscription.getKey ? subscription.getKey('p256dh') : null;
+        const authBuffer = subscription.getKey ? subscription.getKey('auth') : null;
+        
+        const p256dhKey = p256dhBuffer 
+          ? window.dueTonightPush.arrayBufferToBase64(p256dhBuffer)
+          : (rawSubscription.keys ? rawSubscription.keys.p256dh : '');
+        const authKey = authBuffer
+          ? window.dueTonightPush.arrayBufferToBase64(authBuffer)
+          : (rawSubscription.keys ? rawSubscription.keys.auth : '');
+          
+        if (!p256dhKey || !authKey) {
+          throw new Error('Failed to extract subscription keys');
+        }
+        
         return {
-          endpoint: rawSubscription.endpoint,
-          p256dh: rawSubscription.keys.p256dh,
-          auth: rawSubscription.keys.auth
+          endpoint: subscription.endpoint,
+          p256dh: p256dhKey,
+          auth: authKey
         };
       },
       

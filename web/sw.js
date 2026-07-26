@@ -20,6 +20,10 @@ self.addEventListener('push', function(event) {
     body: payload.body || 'Something new has been uploaded!',
     icon: '/favicon.png',
     badge: '/favicon.png',
+    vibrate: [200, 100, 200],
+    tag: 'duetonight-notification',
+    renotify: true,
+    requireInteraction: true,
     data: {
       url: payload.url || '/'
     }
