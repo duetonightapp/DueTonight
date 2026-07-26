@@ -1,16 +1,23 @@
-import 'dart:io';
+import 'dart:io' as io;
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:dio/dio.dart';
+import 'package:mime/mime.dart';
 import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/assignment_solution_model.dart';
 import '../../../data/models/room_attachment_model.dart';
-import '../../providers/room_provider.dart';
+import '../../providers/assignment_solution_provider.dart';
 import '../../providers/attachment_provider.dart';
+import '../../providers/room_provider.dart';
 import 'attachment_viewer_screen.dart';
 
 class RoomAssignmentDetailScreen extends ConsumerWidget {
@@ -25,6 +32,24 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
 
   Future<void> _downloadAndOpenFile(BuildContext context, RoomAttachment attachment) async {
     try {
+      if (kIsWeb) {
+        final urlUri = Uri.parse(attachment.fileUrl);
+        if (await canLaunchUrl(urlUri)) {
+          await launchUrl(urlUri, mode: LaunchMode.externalApplication);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Attachment opened in a new tab.'),
+              backgroundColor: AppTheme.safeColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          throw Exception("Could not open attachment link.");
+        }
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -46,12 +71,12 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
       );
 
       final dio = Dio();
-      Directory? downloadsDir;
+      io.Directory? downloadsDir;
       String? savePath;
 
       try {
-        if (Platform.isAndroid) {
-          downloadsDir = Directory('/storage/emulated/0/Download');
+        if (io.Platform.isAndroid) {
+          downloadsDir = io.Directory('/storage/emulated/0/Download');
           if (!await downloadsDir.exists()) {
             downloadsDir = await getExternalStorageDirectory();
           }
@@ -62,7 +87,7 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
             throw Exception("No external storage directory found");
           }
         } else {
-          if (Platform.isIOS) {
+          if (io.Platform.isIOS) {
             downloadsDir = await getApplicationDocumentsDirectory();
           } else {
             downloadsDir = await getDownloadsDirectory();
@@ -105,10 +130,233 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _downloadAndOpenSolution(
+    BuildContext context,
+    AssignmentSolution solution,
+  ) async {
+    try {
+      if (kIsWeb) {
+        final urlUri = Uri.parse(solution.fileUrl);
+        if (await canLaunchUrl(urlUri)) {
+          await launchUrl(urlUri, mode: LaunchMode.externalApplication);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Solution opened in a new tab.'),
+              backgroundColor: AppTheme.safeColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          throw Exception("Could not open solution link.");
+        }
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('Downloading ${solution.fileName}...'),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      final dio = Dio();
+      io.Directory? downloadsDir;
+      String? savePath;
+
+      try {
+        if (io.Platform.isAndroid) {
+          downloadsDir = io.Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            downloadsDir = await getExternalStorageDirectory();
+          }
+          if (downloadsDir != null) {
+            savePath = p.join(downloadsDir.path, solution.fileName);
+            await dio.download(solution.fileUrl, savePath);
+          } else {
+            throw Exception('No external storage directory found');
+          }
+        } else {
+          if (io.Platform.isIOS) {
+            downloadsDir = await getApplicationDocumentsDirectory();
+          } else {
+            downloadsDir = await getDownloadsDirectory();
+          }
+          downloadsDir ??= await getTemporaryDirectory();
+          savePath = p.join(downloadsDir.path, solution.fileName);
+          await dio.download(solution.fileUrl, savePath);
+        }
+      } catch (e) {
+        downloadsDir = await getTemporaryDirectory();
+        savePath = p.join(downloadsDir.path, solution.fileName);
+        await dio.download(solution.fileUrl, savePath);
+      }
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Downloaded successfully to ${p.basename(savePath!)}'),
+          backgroundColor: AppTheme.safeColor,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Open',
+            textColor: Colors.white,
+            onPressed: () {
+              OpenFilex.open(savePath!);
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to download: $e'),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _uploadSolution(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx'],
+      );
+      if (result == null) return;
+
+      final file = result.files.single;
+      final fileName = file.name;
+      final lowerName = fileName.toLowerCase();
+      final mimeType = lookupMimeType(fileName) ??
+          (lowerName.endsWith('.docx')
+              ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              : lowerName.endsWith('.doc')
+                  ? 'application/msword'
+                  : 'application/pdf');
+
+      final Uint8List bytes;
+      final int size;
+      if (kIsWeb) {
+        if (file.bytes == null) return;
+        bytes = file.bytes!;
+        size = bytes.length;
+      } else {
+        if (file.path == null) return;
+        final ioFile = io.File(file.path!);
+        bytes = await ioFile.readAsBytes();
+        size = bytes.length;
+      }
+
+      final isSupportedDocument = mimeType == 'application/pdf' ||
+          mimeType == 'application/msword' ||
+          mimeType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          lowerName.endsWith('.doc') ||
+          lowerName.endsWith('.docx') ||
+          lowerName.endsWith('.pdf');
+
+      if (!isSupportedDocument) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please upload a PDF or Word file.'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      if (size > 5 * 1024 * 1024) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('File size exceeds the 5MB limit.'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('Uploading solution...'),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 10),
+        ),
+      );
+
+      final uploadService = ref.read(cloudinaryUploadServiceProvider);
+      final uploadResult = await uploadService.uploadFile(
+        fileBytes: bytes,
+        roomId: roomId,
+        fileName: fileName,
+        folder: 'solutions',
+        onProgress: (_) {},
+      );
+
+      await ref.read(assignmentSolutionRepositoryProvider).createSolution(
+        roomId: roomId,
+        assignmentId: assignmentId,
+        fileName: fileName,
+        fileUrl: uploadResult.url,
+        fileType: mimeType,
+      );
+
+      ref.invalidate(assignmentSolutionsProvider(assignmentId));
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Solution uploaded successfully!'),
+          backgroundColor: AppTheme.safeColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Upload failed: $e'),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final assignmentsAsync = ref.watch(roomAssignmentsProvider(roomId));
     final attachmentsAsync = ref.watch(assignmentAttachmentsProvider(assignmentId));
+    final solutionsAsync = ref.watch(assignmentSolutionsProvider(assignmentId));
     final role = ref.watch(currentRoomRoleProvider(roomId));
     final canDelete = role == 'owner' || role == 'moderator';
 
@@ -344,6 +592,112 @@ class RoomAssignmentDetailScreen extends ConsumerWidget {
                         color: Colors.white.withOpacity(0.7),
                         fontSize: 14,
                         height: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Uploaded Solutions',
+                          style: GoogleFonts.unbounded(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _uploadSolution(context, ref),
+                        icon: const Icon(Icons.upload_file, size: 18),
+                        label: const Text('Upload File'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  solutionsAsync.when(
+                    data: (solutions) {
+                      if (solutions.isEmpty) {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white.withOpacity(0.06)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'No solutions uploaded yet.',
+                              style: GoogleFonts.inter(
+                                color: Colors.white.withOpacity(0.4),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: solutions.length,
+                        itemBuilder: (context, index) {
+                          final solution = solutions[index];
+                          final timestamp = DateFormat('dd MMM yyyy, hh:mm a').format(solution.createdAt);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white.withOpacity(0.06)),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                leading: const Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  color: AppTheme.primaryColor,
+                                ),
+                                title: Text(
+                                  solution.fileName,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withOpacity(0.95),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  timestamp,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withOpacity(0.4),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.download_outlined),
+                                  onPressed: () => _downloadAndOpenSolution(context, solution),
+                                ),
+                                onTap: () => _downloadAndOpenSolution(context, solution),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    loading: () => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    error: (err, _) => Center(
+                      child: Text(
+                        'Failed to load solutions: $err',
+                        style: TextStyle(color: AppTheme.errorColor, fontSize: 13),
                       ),
                     ),
                   ),
