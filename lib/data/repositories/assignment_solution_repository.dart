@@ -65,7 +65,7 @@ class AssignmentSolutionRepository {
     final solution = AssignmentSolution.fromJson(Map<String, dynamic>.from(response));
 
     // Fetch uploader name & assignment details asynchronously to send notification
-    _triggerNotification(
+    await _triggerNotification(
       roomId: roomId,
       assignmentId: assignmentId,
       fileName: fileName,

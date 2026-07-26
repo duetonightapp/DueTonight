@@ -56,15 +56,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ status: 'No members in room' });
     }
 
-    // 2. Filter out the uploader
-    const recipientIds = membersRes.rows
-      .map((m: any) => m.user_id)
-      .filter((id: string) => id !== uploaderId);
-
-    if (recipientIds.length === 0) {
-      await client.end();
-      return res.status(200).json({ status: 'No recipients (only uploader in room)' });
-    }
+    // 2. Map recipient user IDs for all room members
+    const recipientIds = membersRes.rows.map((m: any) => m.user_id);
 
     // 3. Fetch push subscriptions
     const subsRes = await client.query(

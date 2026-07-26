@@ -237,7 +237,7 @@ class RoomRepository {
 
     final assignmentId = response['id'] as String;
 
-    _triggerNotification(
+    await _triggerNotification(
       roomId: roomId,
       type: 'assignment',
       title: title,
@@ -259,7 +259,7 @@ class RoomRepository {
       'created_by': _client.auth.currentUser?.id,
     });
 
-    _triggerNotification(
+    await _triggerNotification(
       roomId: roomId,
       type: 'announcement',
       title: title,
