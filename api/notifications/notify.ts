@@ -1,10 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { Client } from 'pg';
+import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 
-const databaseUrl =
-  process.env.DATABASE_URL ||
-  'postgresql://postgres:HotgHGEQypvRXXWb@db.tdotndrapfawgljyzrkn.supabase.co:5432/postgres';
+const supabaseUrl = process.env.SUPABASE_URL || 'https://tdotndrapfawgljyzrkn.supabase.co';
+const supabaseAnonKey =
+  process.env.SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkb3RuZHJhcGZhd2dsanl6cmtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3NzYzNTQsImV4cCI6MjA5NDM1MjM1NH0.eGmy70EUcoAtqixypn6_eZMvGziXtNmLTj3sPbsYNQU';
+
 const vapidPublicKey =
   process.env.VAPID_PUBLIC_KEY ||
   'BJD0k-xLMppRIu6ARcTQVCpO17S-ZVS-TW6AgyCDOqX7Lzl_yQY1v4eeWGodRHibzSGaodeYtjid8lSU2qKIDVI';
@@ -17,6 +19,8 @@ webpush.setVapidDetails(
   vapidPublicKey,
   vapidPrivateKey
 );
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,43 +35,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { roomId, type, title, details, uploaderName, uploaderId } = req.body || {};
+  const { roomId, type, title, details, uploaderName } = req.body || {};
 
   if (!roomId || !type || !title || !uploaderName) {
-    return res.status(400).json({ error: 'Missing required parameters' });
+    return res.status(400).json({ error: 'Missing required parameters (roomId, type, title, uploaderName)' });
   }
 
-  const client = new Client({
-    connectionString: databaseUrl,
-    ssl: { rejectUnauthorized: false },
-  });
-
   try {
-    await client.connect();
-
-    // 1. Fetch room members
-    const membersRes = await client.query(
-      'SELECT user_id FROM public.room_members WHERE room_id = $1::uuid',
-      [roomId]
+    // Call SECURITY DEFINER RPC function to fetch subscriptions for room members
+    const { data: subscriptions, error } = await supabase.rpc(
+      'get_push_subscriptions_for_room',
+      { p_room_id: roomId }
     );
 
-    if (membersRes.rows.length === 0) {
-      await client.end();
-      return res.status(200).json({ status: 'No members in room' });
+    if (error) {
+      console.error('RPC Error:', error);
+      return res.status(500).json({ error: error.message });
     }
 
-    // 2. Map recipient user IDs for all room members
-    const recipientIds = membersRes.rows.map((m: any) => m.user_id);
-
-    // 3. Fetch push subscriptions
-    const subsRes = await client.query(
-      'SELECT id, user_id, endpoint, p256dh, auth FROM public.push_subscriptions WHERE user_id = ANY($1::uuid[])',
-      [recipientIds]
-    );
-
-    if (subsRes.rows.length === 0) {
-      await client.end();
-      return res.status(200).json({ status: 'No active push subscriptions' });
+    if (!subscriptions || subscriptions.length === 0) {
+      return res.status(200).json({ status: 'No subscriptions found for room' });
     }
 
     let notificationTitle = `${uploaderName} posted an update`;
@@ -86,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const deleteIds: string[] = [];
-    const sendPromises = subsRes.rows.map(async (sub: any) => {
+    const sendPromises = subscriptions.map(async (sub: any) => {
       try {
         await webpush.sendNotification(
           {
@@ -106,22 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await Promise.all(sendPromises);
 
     if (deleteIds.length > 0) {
-      await client.query(
-        'DELETE FROM public.push_subscriptions WHERE id = ANY($1::uuid[])',
-        [deleteIds]
-      );
+      await supabase.from('push_subscriptions').delete().in('id', deleteIds);
     }
 
-    await client.end();
     return res.status(200).json({
       status: 'Notifications sent successfully',
-      deliveredCount: subsRes.rows.length - deleteIds.length,
+      deliveredCount: subscriptions.length - deleteIds.length,
     });
   } catch (err: any) {
     console.error('Error in notify handler:', err);
-    try {
-      await client.end();
-    } catch (_) {}
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }
