@@ -51,6 +51,11 @@ final roomPersonalRemindersProvider =
       return ref.read(roomRepositoryProvider).watchPersonalReminders(roomId);
     });
 
+final roomPushSubscribedUserIdsProvider =
+    FutureProvider.family<Set<String>, String>((ref, roomId) {
+  return ref.read(roomRepositoryProvider).fetchPushSubscribedUserIds(roomId);
+});
+
 final currentRoomRoleProvider = Provider.family<String?, String>((ref, roomId) {
   final members = ref.watch(roomMembersProvider(roomId)).valueOrNull ?? [];
   final userId = Supabase.instance.client.auth.currentUser?.id;

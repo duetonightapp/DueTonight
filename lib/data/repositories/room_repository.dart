@@ -442,4 +442,24 @@ class RoomRepository {
     }
     return map;
   }
+
+  Future<Set<String>> fetchPushSubscribedUserIds(String roomId) async {
+    try {
+      final response = await _client.rpc(
+        'get_room_push_subscribed_user_ids',
+        params: {'p_room_id': roomId},
+      );
+      if (response == null) return {};
+      final rows = response as List;
+      final set = <String>{};
+      for (final row in rows) {
+        final uid = (row as Map)['user_id'] as String?;
+        if (uid != null) set.add(uid);
+      }
+      return set;
+    } catch (e) {
+      debugPrint('Error fetching push subscribed user IDs: $e');
+      return {};
+    }
+  }
 }

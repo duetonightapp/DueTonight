@@ -1151,6 +1151,7 @@ class _RoomMembersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membersAsync = ref.watch(roomMembersProvider(roomId));
+    final subscribedUserIds = ref.watch(roomPushSubscribedUserIdsProvider(roomId)).valueOrNull ?? {};
     final role = ref.watch(currentRoomRoleProvider(roomId));
     final repo = ref.read(roomRepositoryProvider);
     final canManage = role == 'owner' || role == 'moderator';
@@ -1174,15 +1175,69 @@ class _RoomMembersTab extends ConsumerWidget {
 
             return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: members.length,
+              itemCount: members.length + 1,
               itemBuilder: (context, index) {
-                final member = members[index];
+                if (index == 0) {
+                  final subscribedCount = members.where((m) => subscribedUserIds.contains(m.userId)).length;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.notifications_active_outlined,
+                            color: Color(0xFF10B981),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$subscribedCount of ${members.length} Members Subscribed 🔔',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Members with 🔔 will receive instant home screen push notifications.',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final member = members[index - 1];
                 final profile = profiles[member.userId];
                 final rawName = profile?['full_name'] as String?;
                 final displayName =
                     (rawName != null && rawName.trim().isNotEmpty)
                     ? rawName.trim()
                     : 'Member';
+                final isSubscribed = subscribedUserIds.contains(member.userId);
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -1230,28 +1285,78 @@ class _RoomMembersTab extends ConsumerWidget {
                           fontSize: 15,
                         ),
                       ),
-                      subtitle: Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: member.role == 'owner'
-                              ? AppTheme.primaryColor.withOpacity(0.12)
-                              : Colors.white.withOpacity(0.04),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          member.role.toUpperCase(),
-                          style: TextStyle(
-                            color: member.role == 'owner'
-                                ? AppTheme.primaryColor
-                                : Colors.white.withOpacity(0.4),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10,
-                            letterSpacing: 0.5,
-                          ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: member.role == 'owner'
+                                    ? AppTheme.primaryColor.withOpacity(0.12)
+                                    : Colors.white.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                member.role.toUpperCase(),
+                                style: TextStyle(
+                                  color: member.role == 'owner'
+                                      ? AppTheme.primaryColor
+                                      : Colors.white.withOpacity(0.4),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 10,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSubscribed
+                                    ? const Color(0xFF10B981).withOpacity(0.15)
+                                    : Colors.white.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isSubscribed
+                                      ? const Color(0xFF10B981).withOpacity(0.3)
+                                      : Colors.white.withOpacity(0.06),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isSubscribed
+                                        ? Icons.notifications_active
+                                        : Icons.notifications_off_outlined,
+                                    size: 11,
+                                    color: isSubscribed
+                                        ? const Color(0xFF10B981)
+                                        : Colors.white38,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isSubscribed ? 'Subscribed' : 'Not Subscribed',
+                                    style: TextStyle(
+                                      color: isSubscribed
+                                          ? const Color(0xFF10B981)
+                                          : Colors.white38,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       trailing: () {
