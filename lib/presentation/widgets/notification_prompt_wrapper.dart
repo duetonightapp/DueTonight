@@ -16,24 +16,44 @@ class NotificationPromptWrapper extends ConsumerStatefulWidget {
 }
 
 class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWrapper> {
-  bool _hasPrompted = false;
-
-
+  String? _lastCheckedUserId;
 
   Future<void> _checkPermissionsAndShowPrompt(String userId) async {
     final status = await getNotificationPermissionStatus();
     debugPrint('Browser notification permission status: $status');
 
-    if (status == 'default') {
-      if (!mounted) return;
-      try {
-        _showPromptDialog(userId);
-      } catch (e, stack) {
-        debugPrint('Error showing prompt dialog: $e\n$stack');
+    if (status == 'denied') {
+      debugPrint('Notification permission explicitly denied by browser settings.');
+      return;
+    }
+
+    if (status == 'granted') {
+      final isSubscribedSilently = await _registerSubscriptionSilently(userId);
+      if (isSubscribedSilently) {
+        debugPrint('User is already granted and subscribed in database.');
+        return;
       }
-    } else if (status == 'granted') {
-      // If already granted, ensure the subscription is registered in the database
-      _registerSubscriptionSilently(userId);
+    }
+
+    // Check if the user has an active push subscription record in the database
+    try {
+      final client = Supabase.instance.client;
+      final existingSub = await client
+          .from('push_subscriptions')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existingSub == null) {
+        debugPrint('User $userId has NO active push subscription in DB. Showing prompt dialog!');
+        if (!mounted) return;
+        _showPromptDialog(userId);
+      }
+    } catch (e) {
+      debugPrint('Error checking push subscription DB status: $e');
+      if (status == 'default' && mounted) {
+        _showPromptDialog(userId);
+      }
     }
   }
 
@@ -212,7 +232,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
     }
   }
 
-  Future<void> _registerSubscriptionSilently(String userId) async {
+  Future<bool> _registerSubscriptionSilently(String userId) async {
     final subscription = await subscribeUserToPush(AppConstants.vapidPublicKey);
     if (subscription != null) {
       try {
@@ -224,10 +244,12 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
           'auth': subscription['auth'],
         }, onConflict: 'endpoint');
         debugPrint('Push subscription verified and registered silently.');
+        return true;
       } catch (e) {
         debugPrint('Error registering subscription silently: $e');
       }
     }
+    return false;
   }
 
   void _showLoadingSnackBar(String message) {
@@ -277,8 +299,8 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   Widget build(BuildContext context) {
     if (kIsWeb) {
       final user = ref.watch(authStateProvider);
-      if (user != null && user.fullName.isNotEmpty && !_hasPrompted) {
-        _hasPrompted = true;
+      if (user != null && user.fullName.isNotEmpty && _lastCheckedUserId != user.id) {
+        _lastCheckedUserId = user.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkPermissionsAndShowPrompt(user.id);
         });
