@@ -37,12 +37,21 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
     final status = await getNotificationPermissionStatus();
     debugPrint('Browser notification permission status for user $userId: $status');
 
-    if (status == 'denied') {
-      debugPrint('Notification permission explicitly denied by browser settings.');
+    // If browser status is already 'granted', register/refresh silently and exit. NEVER show prompt!
+    if (status == 'granted') {
+      debugPrint('Notification permission already granted by browser. Registering silently if needed.');
+      await _registerSubscriptionSilently(userId);
       return;
     }
 
-    // 2. Check if the user ALREADY has an active push subscription record in the database
+    // If browser status is 'denied', user blocked notifications in browser settings. Do not prompt.
+    if (status == 'denied') {
+      debugPrint('Notification permission explicitly denied in browser settings.');
+      return;
+    }
+
+    // 2. Browser status is 'default' (user has not decided yet).
+    // Check if the user ALREADY has an active push subscription record in the database
     bool isSubscribedInDb = false;
     try {
       final client = Supabase.instance.client;
@@ -50,9 +59,9 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
           .from('push_subscriptions')
           .select('id')
           .eq('user_id', userId)
-          .maybeSingle();
+          .limit(1);
 
-      if (existingSub != null) {
+      if (existingSub.isNotEmpty) {
         isSubscribedInDb = true;
         debugPrint('User $userId ALREADY has an active push subscription in DB.');
       } else {
@@ -62,16 +71,12 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
       debugPrint('Error checking push subscription DB status for user $userId: $e');
     }
 
-    // 3. If user is already subscribed in DB:
+    // 3. If user is already subscribed in DB, do not show prompt dialog
     if (isSubscribedInDb) {
-      if (status == 'granted') {
-        // Silently update subscription keys to keep them fresh
-        _registerSubscriptionSilently(userId);
-      }
-      return; // Do NOT show prompt dialog if already subscribed in DB
+      return;
     }
 
-    // 4. If user is NOT subscribed in DB: SHOW THE PROMPT DIALOG!
+    // 4. If user has NOT granted permission yet AND is NOT subscribed in DB: SHOW THE PROMPT DIALOG!
     if (!mounted) return;
     try {
       _showPromptDialog(userId);
