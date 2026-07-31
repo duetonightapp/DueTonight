@@ -20,22 +20,15 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
 
   Future<void> _checkPermissionsAndShowPrompt(String userId) async {
     final status = await getNotificationPermissionStatus();
-    debugPrint('Browser notification permission status: $status');
+    debugPrint('Browser notification permission status for user $userId: $status');
 
     if (status == 'denied') {
       debugPrint('Notification permission explicitly denied by browser settings.');
       return;
     }
 
-    if (status == 'granted') {
-      final isSubscribedSilently = await _registerSubscriptionSilently(userId);
-      if (isSubscribedSilently) {
-        debugPrint('User is already granted and subscribed in database.');
-        return;
-      }
-    }
-
-    // Check if the user has an active push subscription record in the database
+    // 1. Check if the user ALREADY has an active push subscription record in the database
+    bool isSubscribedInDb = false;
     try {
       final client = Supabase.instance.client;
       final existingSub = await client
@@ -44,16 +37,31 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
           .eq('user_id', userId)
           .maybeSingle();
 
-      if (existingSub == null) {
-        debugPrint('User $userId has NO active push subscription in DB. Showing prompt dialog!');
-        if (!mounted) return;
-        _showPromptDialog(userId);
+      if (existingSub != null) {
+        isSubscribedInDb = true;
+        debugPrint('User $userId ALREADY has an active push subscription in DB.');
+      } else {
+        debugPrint('User $userId has NO active push subscription in DB.');
       }
     } catch (e) {
-      debugPrint('Error checking push subscription DB status: $e');
-      if (status == 'default' && mounted) {
-        _showPromptDialog(userId);
+      debugPrint('Error checking push subscription DB status for user $userId: $e');
+    }
+
+    // 2. If user is already subscribed in DB:
+    if (isSubscribedInDb) {
+      if (status == 'granted') {
+        // Silently update subscription keys to keep them fresh
+        _registerSubscriptionSilently(userId);
       }
+      return; // Do NOT show prompt dialog if already subscribed in DB
+    }
+
+    // 3. If user is NOT subscribed in DB: SHOW THE PROMPT DIALOG!
+    if (!mounted) return;
+    try {
+      _showPromptDialog(userId);
+    } catch (e, stack) {
+      debugPrint('Error showing prompt dialog: $e\n$stack');
     }
   }
 
@@ -299,7 +307,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   Widget build(BuildContext context) {
     if (kIsWeb) {
       final user = ref.watch(authStateProvider);
-      if (user != null && user.fullName.isNotEmpty && _lastCheckedUserId != user.id) {
+      if (user != null && _lastCheckedUserId != user.id) {
         _lastCheckedUserId = user.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkPermissionsAndShowPrompt(user.id);
