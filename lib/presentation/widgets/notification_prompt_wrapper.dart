@@ -20,6 +20,20 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   String? _lastCheckedUserId;
 
   Future<void> _checkPermissionsAndShowPrompt(String userId) async {
+    // 1. Brief delay to allow initial splash/auth route redirection to settle on destination screen
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+
+    try {
+      final router = ref.read(routerProvider);
+      final location = router.routeInformationProvider.value.uri.path;
+      if (location == '/splash' || location == '/login' || location == '/login-callback' || location == '/setup-name') {
+        debugPrint('Still on auth/splash route ($location), waiting 1s...');
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+      }
+    } catch (_) {}
+
     final status = await getNotificationPermissionStatus();
     debugPrint('Browser notification permission status for user $userId: $status');
 
@@ -28,7 +42,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
       return;
     }
 
-    // 1. Check if the user ALREADY has an active push subscription record in the database
+    // 2. Check if the user ALREADY has an active push subscription record in the database
     bool isSubscribedInDb = false;
     try {
       final client = Supabase.instance.client;
@@ -48,7 +62,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
       debugPrint('Error checking push subscription DB status for user $userId: $e');
     }
 
-    // 2. If user is already subscribed in DB:
+    // 3. If user is already subscribed in DB:
     if (isSubscribedInDb) {
       if (status == 'granted') {
         // Silently update subscription keys to keep them fresh
@@ -57,7 +71,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
       return; // Do NOT show prompt dialog if already subscribed in DB
     }
 
-    // 3. If user is NOT subscribed in DB: SHOW THE PROMPT DIALOG!
+    // 4. If user is NOT subscribed in DB: SHOW THE PROMPT DIALOG!
     if (!mounted) return;
     try {
       _showPromptDialog(userId);
@@ -309,15 +323,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   Widget build(BuildContext context) {
     if (kIsWeb) {
       final user = ref.watch(authStateProvider);
-      final router = ref.watch(routerProvider);
-      final location = router.routeInformationProvider.value.uri.path;
-
-      final isAuthOrLoadingRoute = location == '/splash' ||
-          location == '/login' ||
-          location == '/login-callback' ||
-          location == '/setup-name';
-
-      if (user != null && !isAuthOrLoadingRoute && _lastCheckedUserId != user.id) {
+      if (user != null && _lastCheckedUserId != user.id) {
         _lastCheckedUserId = user.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkPermissionsAndShowPrompt(user.id);
