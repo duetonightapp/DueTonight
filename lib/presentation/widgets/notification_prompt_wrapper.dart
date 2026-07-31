@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/notification_helper.dart';
+import '../../routes/app_router.dart';
 import '../providers/auth_provider.dart';
 
 class NotificationPromptWrapper extends ConsumerStatefulWidget {
@@ -66,12 +67,13 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   }
 
   void _showPromptDialog(String userId) {
-    final navigator = Navigator.of(context);
+    final dialogContext = rootNavigatorKey.currentContext ?? context;
 
     showDialog(
-      context: context,
+      context: dialogContext,
       barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogCtx) {
+        final navigator = Navigator.of(dialogCtx);
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           backgroundColor: const Color(0xFF1E1C29), // Rich dark purple theme
