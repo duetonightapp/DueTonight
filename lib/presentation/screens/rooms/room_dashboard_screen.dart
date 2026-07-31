@@ -928,12 +928,20 @@ class _RoomAssignmentsTabState extends ConsumerState<_RoomAssignmentsTab> {
                 );
               } else {
                 // By Priority grouping view
+                final completedIds = ref.watch(completedAssignmentsProvider);
+
+                final pendingAssignments =
+                    assignments.where((a) => !completedIds.contains(a.id)).toList();
+                final completedAssignmentsList =
+                    assignments.where((a) => completedIds.contains(a.id)).toList();
+
                 final highPriority = <RoomAssignment>[];
                 final medPriority = <RoomAssignment>[];
                 final lowPriority = <RoomAssignment>[];
 
-                for (final a in assignments) {
-                  final priority = a.deadline != null ? _getPriority(a.deadline!) : 'LOW';
+                for (final a in pendingAssignments) {
+                  final priority =
+                      a.deadline != null ? _getPriority(a.deadline!) : 'LOW';
                   if (priority == 'HIGH') {
                     highPriority.add(a);
                   } else if (priority == 'MEDIUM') {
@@ -952,20 +960,68 @@ class _RoomAssignmentsTabState extends ConsumerState<_RoomAssignmentsTab> {
                 highPriority.sort(sorter);
                 medPriority.sort(sorter);
                 lowPriority.sort(sorter);
+                completedAssignmentsList.sort(sorter);
 
                 final widgets = <Widget>[];
 
+                // 1. Pending (Not Completed) Sub-Section as per Priority
                 if (highPriority.isNotEmpty) {
-                  widgets.add(const _PriorityHeader(title: 'HIGH PRIORITY', color: AppTheme.overdueColor));
-                  widgets.addAll(highPriority.map((a) => RoomAssignmentCard(assignment: a)));
+                  widgets.add(const _PriorityHeader(
+                    title: 'HIGH PRIORITY (PENDING)',
+                    color: AppTheme.overdueColor,
+                  ));
+                  widgets.addAll(
+                    highPriority.map((a) => RoomAssignmentCard(assignment: a)),
+                  );
                 }
                 if (medPriority.isNotEmpty) {
-                  widgets.add(const _PriorityHeader(title: 'MEDIUM PRIORITY', color: AppTheme.urgentColor));
-                  widgets.addAll(medPriority.map((a) => RoomAssignmentCard(assignment: a)));
+                  widgets.add(const _PriorityHeader(
+                    title: 'MEDIUM PRIORITY (PENDING)',
+                    color: AppTheme.urgentColor,
+                  ));
+                  widgets.addAll(
+                    medPriority.map((a) => RoomAssignmentCard(assignment: a)),
+                  );
                 }
                 if (lowPriority.isNotEmpty) {
-                  widgets.add(const _PriorityHeader(title: 'LOW PRIORITY', color: AppTheme.safeColor));
-                  widgets.addAll(lowPriority.map((a) => RoomAssignmentCard(assignment: a)));
+                  widgets.add(const _PriorityHeader(
+                    title: 'LOW PRIORITY (PENDING)',
+                    color: AppTheme.safeColor,
+                  ));
+                  widgets.addAll(
+                    lowPriority.map((a) => RoomAssignmentCard(assignment: a)),
+                  );
+                }
+
+                if (pendingAssignments.isEmpty && completedAssignmentsList.isNotEmpty) {
+                  widgets.add(
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          '🎉 All assignments completed!',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF10B981),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                // 2. Completed Sub-Section
+                if (completedAssignmentsList.isNotEmpty) {
+                  widgets.add(
+                    _PriorityHeader(
+                      title: 'COMPLETED (${completedAssignmentsList.length})',
+                      color: const Color(0xFF10B981),
+                    ),
+                  );
+                  widgets.addAll(
+                    completedAssignmentsList.map((a) => RoomAssignmentCard(assignment: a)),
+                  );
                 }
 
                 return ListView(
