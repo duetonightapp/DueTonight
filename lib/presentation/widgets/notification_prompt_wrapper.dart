@@ -309,7 +309,15 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   Widget build(BuildContext context) {
     if (kIsWeb) {
       final user = ref.watch(authStateProvider);
-      if (user != null && _lastCheckedUserId != user.id) {
+      final router = ref.watch(routerProvider);
+      final location = router.routeInformationProvider.value.uri.path;
+
+      final isAuthOrLoadingRoute = location == '/splash' ||
+          location == '/login' ||
+          location == '/login-callback' ||
+          location == '/setup-name';
+
+      if (user != null && !isAuthOrLoadingRoute && _lastCheckedUserId != user.id) {
         _lastCheckedUserId = user.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkPermissionsAndShowPrompt(user.id);
