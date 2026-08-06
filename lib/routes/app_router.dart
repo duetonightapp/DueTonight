@@ -13,6 +13,7 @@ import '../presentation/screens/rooms/subject_assignments_screen.dart';
 import '../presentation/screens/rooms/room_assignment_detail_screen.dart';
 import '../presentation/screens/auth/splash_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 class RiverpodRouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -33,6 +34,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: notifier,
+    observers: [
+      PosthogObserver(),
+    ],
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
       debugPrint(
