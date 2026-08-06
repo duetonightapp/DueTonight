@@ -48,13 +48,22 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (!isLoggedIn && !isAuthRoute && !isCallbackRoute && !isSplashRoute) {
         final target = state.uri.toString();
-        Hive.openBox<String>('auth_redirect').then((box) {
-          box.put('redirectTo', target);
-        });
+        if (Hive.isBoxOpen('auth_redirect')) {
+          Hive.box<String>('auth_redirect').put('redirectTo', target);
+        }
         return '/login?redirectTo=${Uri.encodeComponent(target)}';
       }
 
       if (isLoggedIn && needsName && !isSetupNameRoute && !isSplashRoute) {
+        String? redirectTo = state.uri.queryParameters['redirectTo'];
+        if (redirectTo == null || redirectTo.isEmpty) {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            redirectTo = Hive.box<String>('auth_redirect').get('redirectTo');
+          }
+        }
+        if (redirectTo != null && redirectTo.isNotEmpty) {
+          return '/setup-name?redirectTo=${Uri.encodeComponent(redirectTo)}';
+        }
         return '/setup-name';
       }
 
@@ -68,6 +77,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             final box = Hive.box<String>('auth_redirect');
             redirectTo = box.get('redirectTo');
             box.delete('redirectTo');
+          }
+        } else {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            Hive.box<String>('auth_redirect').delete('redirectTo');
           }
         }
 

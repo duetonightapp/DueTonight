@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 
@@ -40,8 +41,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _checkAuthState() {
     final user = ref.read(authStateProvider);
     if (user != null && mounted) {
-      final needsName = user.fullName.trim().isEmpty;
-      context.go(needsName ? '/setup-name' : '/');
+      _navigateAfterAuth(user.fullName);
+    }
+  }
+
+  void _navigateAfterAuth(String fullName) {
+    if (!mounted) return;
+    final needsName = fullName.trim().isEmpty;
+
+    String? redirectTo = GoRouterState.of(context).uri.queryParameters['redirectTo'];
+    if (redirectTo == null || redirectTo.isEmpty) {
+      if (Hive.isBoxOpen('auth_redirect')) {
+        redirectTo = Hive.box<String>('auth_redirect').get('redirectTo');
+      }
+    }
+
+    if (needsName) {
+      if (redirectTo != null && redirectTo.isNotEmpty) {
+        context.go('/setup-name?redirectTo=${Uri.encodeComponent(redirectTo!)}');
+      } else {
+        context.go('/setup-name');
+      }
+    } else {
+      if (redirectTo != null && redirectTo.isNotEmpty) {
+        if (Hive.isBoxOpen('auth_redirect')) {
+          Hive.box<String>('auth_redirect').delete('redirectTo');
+        }
+        String finalTarget = redirectTo!;
+        try {
+          finalTarget = Uri.decodeComponent(finalTarget);
+        } catch (_) {}
+        context.go(finalTarget);
+      } else {
+        context.go('/');
+      }
     }
   }
 
@@ -129,8 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ) {
       if (next != null && mounted) {
         final fullName = (next as dynamic).fullName as String? ?? '';
-        final needsName = fullName.trim().isEmpty;
-        context.go(needsName ? '/setup-name' : '/');
+        _navigateAfterAuth(fullName);
       }
     });
 
