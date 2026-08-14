@@ -17,11 +17,22 @@ import '../presentation/screens/auth/splash_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
+/// Tracks whether the splash/init phase is complete.
+/// Splash screen sets this to true once its animation + auth check finishes.
+final splashCompleteProvider = StateProvider<bool>((ref) => false);
+
+/// Stores the deep-link target the user originally navigated to,
+/// so we can restore it after splash finishes.
+final pendingDeepLinkProvider = StateProvider<String?>((ref) => null);
+
 class RiverpodRouterNotifier extends ChangeNotifier {
   final Ref _ref;
 
   RiverpodRouterNotifier(this._ref) {
     _ref.listen(authStateProvider, (previous, next) {
+      notifyListeners();
+    });
+    _ref.listen(splashCompleteProvider, (previous, next) {
       notifyListeners();
     });
   }
@@ -34,26 +45,66 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/splash',
+    // DO NOT set initialLocation — let GoRouter use the browser URL.
     refreshListenable: notifier,
     observers: [
       PosthogObserver(),
     ],
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
+      final splashDone = ref.read(splashCompleteProvider);
+      final currentLocation = state.matchedLocation;
+      final fullUri = state.uri.toString();
+
       debugPrint(
-        'Router redirect: isLoggedIn=${authState != null}, location=${state.matchedLocation}',
+        'Router redirect: splashDone=$splashDone, isLoggedIn=${authState != null}, location=$currentLocation, fullUri=$fullUri',
       );
 
       final isLoggedIn = authState != null;
       final needsName = isLoggedIn && authState.fullName.trim().isEmpty;
-      final isSplashRoute = state.matchedLocation == '/splash';
-      final isAuthRoute = state.matchedLocation == '/login';
-      final isCallbackRoute = state.matchedLocation == '/login-callback';
-      final isSetupNameRoute = state.matchedLocation == '/setup-name';
+      final isSplashRoute = currentLocation == '/splash';
+      final isAuthRoute = currentLocation == '/login';
+      final isCallbackRoute = currentLocation == '/login-callback';
+      final isSetupNameRoute = currentLocation == '/setup-name';
 
+      // ── SPLASH GATE ──────────────────────────────────────
+      // If splash hasn't completed yet, save the deep-link and go to splash.
+      if (!splashDone && !isSplashRoute) {
+        // Save the original deep link target so splash can restore it.
+        if (fullUri != '/' && fullUri.isNotEmpty) {
+          ref.read(pendingDeepLinkProvider.notifier).state = fullUri;
+        }
+        return '/splash';
+      }
+
+      // If splash is done and we're still on /splash, navigate away.
+      if (splashDone && isSplashRoute) {
+        // Check for a saved deep-link target.
+        final pendingLink = ref.read(pendingDeepLinkProvider);
+        if (pendingLink != null && pendingLink.isNotEmpty && pendingLink != '/') {
+          ref.read(pendingDeepLinkProvider.notifier).state = null;
+          // But if not logged in, save the deep link and go to login.
+          if (!isLoggedIn) {
+            if (Hive.isBoxOpen('auth_redirect')) {
+              Hive.box<String>('auth_redirect').put('redirectTo', pendingLink);
+            }
+            return '/login?redirectTo=${Uri.encodeComponent(pendingLink)}';
+          }
+          if (needsName) {
+            return '/setup-name?redirectTo=${Uri.encodeComponent(pendingLink)}';
+          }
+          // Logged in, no name needed → go to the deep link.
+          return pendingLink;
+        }
+        // No pending deep link — normal flow.
+        if (!isLoggedIn) return '/login';
+        if (needsName) return '/setup-name';
+        return '/';
+      }
+
+      // ── AUTH GUARDS (only active after splash is done) ──
       if (!isLoggedIn && !isAuthRoute && !isCallbackRoute && !isSplashRoute) {
-        final target = state.uri.toString();
+        final target = fullUri;
         if (Hive.isBoxOpen('auth_redirect')) {
           Hive.box<String>('auth_redirect').put('redirectTo', target);
         }
