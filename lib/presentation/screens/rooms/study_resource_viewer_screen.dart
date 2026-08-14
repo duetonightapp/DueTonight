@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,22 +10,31 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/web_iframe_helper.dart';
 import '../../../data/models/room_study_resource_model.dart';
+import '../../providers/room_provider.dart';
+import '../../providers/study_resource_provider.dart';
 
-class StudyResourceViewerScreen extends StatefulWidget {
-  final RoomStudyResource resource;
+class StudyResourceViewerScreen extends ConsumerStatefulWidget {
+  final RoomStudyResource? resource;
+  final String? roomId;
+  final String? resourceId;
+  final String? roomCode;
 
   const StudyResourceViewerScreen({
     super.key,
-    required this.resource,
+    this.resource,
+    this.roomId,
+    this.resourceId,
+    this.roomCode,
   });
 
   @override
-  State<StudyResourceViewerScreen> createState() =>
+  ConsumerState<StudyResourceViewerScreen> createState() =>
       _StudyResourceViewerScreenState();
 }
 
 class _StudyResourceViewerScreenState
-    extends State<StudyResourceViewerScreen> {
+    extends ConsumerState<StudyResourceViewerScreen> {
+  RoomStudyResource? _resource;
   Uint8List? _pdfBytes;
   bool _isLoading = true;
   bool _useBlobIframe = false;
@@ -33,11 +44,67 @@ class _StudyResourceViewerScreenState
   @override
   void initState() {
     super.initState();
-    _viewTypeId = 'iframe-doc-viewer-${widget.resource.id}';
-    if (widget.resource.isPdf) {
-      _loadPdf();
+    _resource = widget.resource;
+    if (_resource != null) {
+      _initResourceViewer(_resource!);
     } else {
-      _setupOfficeViewer();
+      _fetchResourceAndJoin();
+    }
+  }
+
+  Future<void> _fetchResourceAndJoin() async {
+    try {
+      final roomId = widget.roomId ?? '';
+      final resourceId = widget.resourceId ?? '';
+      final roomCode = widget.roomCode ?? '';
+
+      // Auto-join room by code if user isn't already joined
+      if (roomCode.isNotEmpty) {
+        try {
+          final roomRepo = ref.read(roomRepositoryProvider);
+          await roomRepo.joinRoomByCode(roomCode);
+        } catch (_) {
+          // Silent catch if user is already a member
+        }
+      }
+
+      ref.invalidate(myRoomsProvider);
+      if (roomId.isNotEmpty) {
+        ref.invalidate(roomStudyResourcesProvider(roomId));
+      }
+
+      final repo = ref.read(studyResourceRepositoryProvider);
+      final resource = await repo.getStudyResourceById(resourceId);
+
+      if (resource != null && mounted) {
+        setState(() {
+          _resource = resource;
+        });
+        _initResourceViewer(resource);
+      } else {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Resource not found or access denied.';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error loading study resource: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _initResourceViewer(RoomStudyResource resource) {
+    _viewTypeId = 'iframe-doc-viewer-${resource.id}';
+    if (resource.isPdf) {
+      _loadPdf(resource);
+    } else {
+      _setupOfficeViewer(resource);
     }
   }
 
@@ -55,10 +122,10 @@ class _StudyResourceViewerScreenState
     return '';
   }
 
-  Future<void> _loadPdf() async {
+  Future<void> _loadPdf(RoomStudyResource resource) async {
     try {
       final client = Supabase.instance.client;
-      final storagePath = _extractStoragePath(widget.resource.fileUrl);
+      final storagePath = _extractStoragePath(resource.fileUrl);
 
       // Strategy 1: Supabase client authenticated download
       if (storagePath.isNotEmpty) {
@@ -98,7 +165,7 @@ class _StudyResourceViewerScreenState
       }
 
       // Strategy 3: Standard HTTP request
-      final response = await http.get(Uri.parse(widget.resource.fileUrl));
+      final response = await http.get(Uri.parse(resource.fileUrl));
       if (response.statusCode == 200) {
         if (mounted) {
           setState(() {
@@ -142,9 +209,9 @@ class _StudyResourceViewerScreenState
     }
   }
 
-  void _setupOfficeViewer() {
+  void _setupOfficeViewer(RoomStudyResource resource) {
     if (kIsWeb) {
-      final encodedUrl = Uri.encodeComponent(widget.resource.fileUrl);
+      final encodedUrl = Uri.encodeComponent(resource.fileUrl);
       final embedUrl =
           'https://docs.google.com/gview?url=$encodedUrl&embedded=true';
       registerIframeViewFactory(_viewTypeId, embedUrl);
@@ -154,16 +221,16 @@ class _StudyResourceViewerScreenState
     });
   }
 
-  Widget _buildPdfLogoBadge() {
+  Widget _buildPdfLogoBadge(RoomStudyResource resource) {
     Color badgeColor;
     String badgeText;
     IconData icon;
 
-    if (widget.resource.isPdf) {
+    if (resource.isPdf) {
       badgeColor = const Color(0xFFEF4444);
       badgeText = 'PDF';
       icon = Icons.picture_as_pdf;
-    } else if (widget.resource.isPpt) {
+    } else if (resource.isPpt) {
       badgeColor = const Color(0xFFF97316);
       badgeText = 'PPT';
       icon = Icons.slideshow;
@@ -205,57 +272,89 @@ class _StudyResourceViewerScreenState
     );
   }
 
+  void _handleBackNavigation() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      final targetRoomId = _resource?.roomId ?? widget.roomId ?? '';
+      if (targetRoomId.isNotEmpty) {
+        context.go('/rooms/$targetRoomId?initialTab=2');
+      } else {
+        context.go('/rooms');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.scaffoldBg,
-      appBar: AppBar(
-        backgroundColor: AppTheme.surfaceColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Row(
-          children: [
-            _buildPdfLogoBadge(),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.resource.title,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+    final resource = _resource;
+
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          _handleBackNavigation();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.scaffoldBg,
+        appBar: AppBar(
+          backgroundColor: AppTheme.surfaceColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: _handleBackNavigation,
+          ),
+          title: resource != null
+              ? Row(
+                  children: [
+                    _buildPdfLogoBadge(resource),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            resource.title,
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${resource.formattedSize} • Protected Internal Preview',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.white.withOpacity(0.5),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  ],
+                )
+              : Text(
+                  'Study Resource Preview',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
-                  Text(
-                    '${widget.resource.formattedSize} • Protected Internal Preview',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+                ),
         ),
-      ),
-      body: Container(
-        color: AppTheme.surfaceColor,
-        child: _buildViewerContent(),
+        body: Container(
+          color: AppTheme.surfaceColor,
+          child: _buildViewerContent(resource),
+        ),
       ),
     );
   }
 
-  Widget _buildViewerContent() {
+  Widget _buildViewerContent(RoomStudyResource? resource) {
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -272,7 +371,7 @@ class _StudyResourceViewerScreenState
       );
     }
 
-    if (_errorMessage != null) {
+    if (_errorMessage != null || resource == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -283,28 +382,21 @@ class _StudyResourceViewerScreenState
                   color: AppTheme.errorColor, size: 48),
               const SizedBox(height: 16),
               Text(
-                _errorMessage!,
+                _errorMessage ?? 'Failed to load study resource.',
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _isLoading = true;
-                    _errorMessage = null;
-                    _useBlobIframe = false;
-                  });
-                  if (widget.resource.isPdf) {
-                    _loadPdf();
-                  } else {
-                    _setupOfficeViewer();
-                  }
-                },
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Retry'),
+                onPressed: _handleBackNavigation,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Go to Room'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ],
@@ -313,7 +405,7 @@ class _StudyResourceViewerScreenState
       );
     }
 
-    if (widget.resource.isPdf && _pdfBytes != null) {
+    if (resource.isPdf && _pdfBytes != null) {
       if (_useBlobIframe && kIsWeb) {
         return HtmlElementView(viewType: _viewTypeId);
       }
@@ -356,7 +448,7 @@ class _StudyResourceViewerScreenState
               child: Column(
                 children: [
                   Icon(
-                    widget.resource.isPpt
+                    resource.isPpt
                         ? Icons.slideshow_rounded
                         : Icons.description_rounded,
                     color: AppTheme.secondaryColor,
@@ -364,7 +456,7 @@ class _StudyResourceViewerScreenState
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    widget.resource.title,
+                    resource.title,
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
