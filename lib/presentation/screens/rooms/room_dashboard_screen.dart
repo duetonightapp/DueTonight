@@ -5222,9 +5222,9 @@ class __RoomStudyResourcesTabState
 
   Future<void> _shareResource(
       RoomStudyResource resource, String roomCode) async {
-    final origin = kIsWeb ? Uri.base.origin : 'https://duetonight.web.app';
+    final origin = kIsWeb ? Uri.base.origin : 'https://my.duetonight.app';
     final shareUrl =
-        '$origin/#/rooms/${widget.roomId}/resources/${resource.id}?code=$roomCode';
+        '$origin/rooms/${widget.roomId}/resources/${resource.id}?code=$roomCode';
 
     await Share.share(
       '📚 Study Resource: "${resource.title}" on DueTonight!\nJoin room & view resource: $shareUrl',
