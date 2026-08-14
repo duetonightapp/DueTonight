@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/web_iframe_helper.dart';
@@ -39,8 +40,63 @@ class _StudyResourceViewerScreenState
     }
   }
 
+  String _extractStoragePath(String fileUrl) {
+    try {
+      final uri = Uri.parse(fileUrl);
+      final pathSegments = uri.pathSegments;
+      final bucketIndex = pathSegments.indexOf('room-files');
+      if (bucketIndex != -1 && bucketIndex < pathSegments.length - 1) {
+        return pathSegments.sublist(bucketIndex + 1).join('/');
+      }
+    } catch (e) {
+      debugPrint('Error parsing storage path: $e');
+    }
+    return '';
+  }
+
   Future<void> _loadPdf() async {
     try {
+      final client = Supabase.instance.client;
+      final storagePath = _extractStoragePath(widget.resource.fileUrl);
+
+      // Strategy 1: Supabase client authenticated download (solves private bucket RLS & CORS)
+      if (storagePath.isNotEmpty) {
+        try {
+          final bytes = await client.storage
+              .from('room-files')
+              .download(storagePath);
+          if (mounted) {
+            setState(() {
+              _pdfBytes = bytes;
+              _isLoading = false;
+            });
+            return;
+          }
+        } catch (storageErr) {
+          debugPrint('Supabase storage download error: $storageErr');
+        }
+      }
+
+      // Strategy 2: Generate fresh signed URL & fetch
+      if (storagePath.isNotEmpty) {
+        try {
+          final freshSignedUrl = await client.storage
+              .from('room-files')
+              .createSignedUrl(storagePath, 3600);
+          final response = await http.get(Uri.parse(freshSignedUrl));
+          if (response.statusCode == 200 && mounted) {
+            setState(() {
+              _pdfBytes = response.bodyBytes;
+              _isLoading = false;
+            });
+            return;
+          }
+        } catch (signedErr) {
+          debugPrint('Fresh signed URL error: $signedErr');
+        }
+      }
+
+      // Strategy 3: Standard HTTP request
       final response = await http.get(Uri.parse(widget.resource.fileUrl));
       if (response.statusCode == 200) {
         if (mounted) {
@@ -53,7 +109,7 @@ class _StudyResourceViewerScreenState
         if (mounted) {
           setState(() {
             _errorMessage =
-                'Failed to load document (Status ${response.statusCode})';
+                'Failed to load document (Status ${response.statusCode}).';
             _isLoading = false;
           });
         }
@@ -184,6 +240,15 @@ class _StudyResourceViewerScreenState
         _pdfBytes!,
         canShowScrollHead: true,
         canShowScrollStatus: true,
+        onDocumentLoadFailed: (details) {
+          debugPrint('SfPdfViewer load failed: ${details.description}');
+          if (mounted) {
+            setState(() {
+              _errorMessage =
+                  'PDF render error: ${details.description} (${details.error})';
+            });
+          }
+        },
       );
     }
 
