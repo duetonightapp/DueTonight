@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:http/http.dart' as http;
 import '../../../data/models/room_attachment_model.dart';
@@ -75,8 +76,42 @@ class _PdfViewerState extends State<_PdfViewer> {
     _fetchBytes();
   }
 
+  String _extractStoragePath(String fileUrl) {
+    try {
+      final uri = Uri.parse(fileUrl);
+      final pathSegments = uri.pathSegments;
+      final bucketIndex = pathSegments.indexOf('room-files');
+      if (bucketIndex != -1 && bucketIndex < pathSegments.length - 1) {
+        return pathSegments.sublist(bucketIndex + 1).join('/');
+      }
+    } catch (e) {
+      debugPrint('Error parsing storage path: $e');
+    }
+    return '';
+  }
+
   Future<void> _fetchBytes() async {
     try {
+      final client = Supabase.instance.client;
+      final storagePath = _extractStoragePath(widget.url);
+
+      if (storagePath.isNotEmpty) {
+        try {
+          final downloadedBytes = await client.storage
+              .from('room-files')
+              .download(storagePath);
+          if (mounted) {
+            setState(() {
+              _bytes = downloadedBytes;
+              _isLoading = false;
+            });
+            return;
+          }
+        } catch (e) {
+          debugPrint('Supabase storage download failed in AttachmentViewerScreen: $e');
+        }
+      }
+
       final response = await http.get(Uri.parse(widget.url));
       if (response.statusCode == 200) {
         if (mounted) {
@@ -125,7 +160,16 @@ class _PdfViewerState extends State<_PdfViewer> {
       );
     }
     if (_bytes != null) {
-      return SfPdfViewer.memory(_bytes!);
+      return SfPdfViewer.memory(
+        _bytes!,
+        onDocumentLoadFailed: (details) {
+          if (mounted) {
+            setState(() {
+              _error = 'PDF error: ${details.description}';
+            });
+          }
+        },
+      );
     }
     return const SizedBox();
   }
