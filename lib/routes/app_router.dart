@@ -198,12 +198,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           final initialTabStr = state.uri.queryParameters['initialTab'];
           final initialTab = int.tryParse(initialTabStr ?? '') ?? 0;
           final autoOpenResourceId = state.uri.queryParameters['resourceId'];
+          final code = state.uri.queryParameters['code'];
           return _buildPageWithTransition(
             state: state,
             child: RoomDashboardScreen(
               roomId: state.pathParameters['roomId']!,
               initialTab: initialTab,
               autoOpenResourceId: autoOpenResourceId,
+              roomCodeQuery: code,
             ),
           );
         },
@@ -251,18 +253,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/rooms/:roomId/resources/:resourceId',
-        pageBuilder: (context, state) {
+        redirect: (context, state) {
           final roomId = state.pathParameters['roomId'] ?? '';
           final resourceId = state.pathParameters['resourceId'] ?? '';
           final code = state.uri.queryParameters['code'] ?? '';
-          return _buildPageWithTransition(
-            state: state,
-            child: StudyResourceViewerScreen(
-              roomId: roomId,
-              resourceId: resourceId,
-              roomCode: code,
-            ),
-          );
+          return '/rooms/$roomId?initialTab=2&resourceId=$resourceId&code=$code';
         },
       ),
       GoRoute(
@@ -272,7 +267,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           final resourceId = state.uri.queryParameters['resourceId'] ?? '';
           final code = state.uri.queryParameters['code'] ?? '';
           if (roomId.isNotEmpty && resourceId.isNotEmpty) {
-            return '/rooms/$roomId/resources/$resourceId?code=$code';
+            return '/rooms/$roomId?initialTab=2&resourceId=$resourceId&code=$code';
           }
           return '/';
         },
