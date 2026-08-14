@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/room_provider.dart';
 import '../rooms/room_dashboard_screen.dart';
+import '../../widgets/responsive_container.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -61,8 +62,9 @@ class HomeScreen extends ConsumerWidget {
           body: Container(
             color: Colors.black,
             child: SafeArea(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
+              child: ResponsiveContainer(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                   child: Column(
@@ -207,7 +209,8 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
           ),
-        );
+        ),
+      );
       },
       loading: () => Scaffold(
         body: Container(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 
@@ -53,7 +54,29 @@ class _FullNameScreenState extends ConsumerState<FullNameScreen> {
           .read(authStateProvider.notifier)
           .updateFullName(_controller.text);
       if (mounted) {
-        context.go('/');
+        String? redirectTo = GoRouterState.of(context).uri.queryParameters['redirectTo'];
+
+        if (redirectTo == null || redirectTo.isEmpty) {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            final box = Hive.box<String>('auth_redirect');
+            redirectTo = box.get('redirectTo');
+            await box.delete('redirectTo');
+          }
+        } else {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            await Hive.box<String>('auth_redirect').delete('redirectTo');
+          }
+        }
+
+        if (redirectTo != null && redirectTo.isNotEmpty) {
+          String finalTarget = redirectTo;
+          try {
+            finalTarget = Uri.decodeComponent(finalTarget);
+          } catch (_) {}
+          context.go(finalTarget);
+        } else {
+          context.go('/');
+        }
       }
     } catch (e) {
       if (!mounted) return;

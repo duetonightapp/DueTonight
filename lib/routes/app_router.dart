@@ -11,8 +11,9 @@ import '../presentation/screens/rooms/room_entry_screen.dart';
 import '../presentation/screens/rooms/room_join_screen.dart';
 import '../presentation/screens/rooms/subject_assignments_screen.dart';
 import '../presentation/screens/rooms/room_assignment_detail_screen.dart';
-import '../presentation/screens/rooms/resource_join_handler_screen.dart';
 import '../presentation/screens/auth/splash_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 class RiverpodRouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -24,12 +25,18 @@ class RiverpodRouterNotifier extends ChangeNotifier {
   }
 }
 
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = RiverpodRouterNotifier(ref);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: notifier,
+    observers: [
+      PosthogObserver(),
+    ],
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
       debugPrint(
@@ -44,23 +51,48 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isSetupNameRoute = state.matchedLocation == '/setup-name';
 
       if (!isLoggedIn && !isAuthRoute && !isCallbackRoute && !isSplashRoute) {
-        final currentUri = state.uri.toString();
-        final redirectUri = Uri.encodeComponent(currentUri);
-        return '/login?redirect=$redirectUri';
+        final target = state.uri.toString();
+        if (Hive.isBoxOpen('auth_redirect')) {
+          Hive.box<String>('auth_redirect').put('redirectTo', target);
+        }
+        return '/login?redirectTo=${Uri.encodeComponent(target)}';
       }
 
       if (isLoggedIn && needsName && !isSetupNameRoute && !isSplashRoute) {
+        String? redirectTo = state.uri.queryParameters['redirectTo'];
+        if (redirectTo == null || redirectTo.isEmpty) {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            redirectTo = Hive.box<String>('auth_redirect').get('redirectTo');
+          }
+        }
+        if (redirectTo != null && redirectTo.isNotEmpty) {
+          return '/setup-name?redirectTo=${Uri.encodeComponent(redirectTo)}';
+        }
         return '/setup-name';
       }
 
       if (isLoggedIn &&
           !needsName &&
           (isAuthRoute || isCallbackRoute || isSetupNameRoute)) {
-        final from = state.uri.queryParameters['redirect'];
-        if (from != null && from.isNotEmpty) {
-          final decoded = Uri.decodeComponent(from);
-          if (decoded.startsWith('/')) {
-            return decoded;
+        String? redirectTo = state.uri.queryParameters['redirectTo'];
+
+        if (redirectTo == null || redirectTo.isEmpty) {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            final box = Hive.box<String>('auth_redirect');
+            redirectTo = box.get('redirectTo');
+            box.delete('redirectTo');
+          }
+        } else {
+          if (Hive.isBoxOpen('auth_redirect')) {
+            Hive.box<String>('auth_redirect').delete('redirectTo');
+          }
+        }
+
+        if (redirectTo != null && redirectTo.isNotEmpty) {
+          try {
+            return Uri.decodeComponent(redirectTo);
+          } catch (_) {
+            return redirectTo;
           }
         }
         return '/';
@@ -99,24 +131,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/rooms/join',
-        pageBuilder: (context, state) => _buildPageWithTransition(
-          state: state,
-          child: const RoomJoinScreen(),
-        ),
+        pageBuilder: (context, state) {
+          final code = state.uri.queryParameters['code'];
+          return _buildPageWithTransition(
+            state: state,
+            child: RoomJoinScreen(initialCode: code),
+          );
+        },
       ),
       GoRoute(
         path: '/rooms/:roomId',
-        pageBuilder: (context, state) {
-          final initialTabStr = state.uri.queryParameters['initialTab'];
-          final initialTab = int.tryParse(initialTabStr ?? '') ?? 0;
-          return _buildPageWithTransition(
-            state: state,
-            child: RoomDashboardScreen(
-              roomId: state.pathParameters['roomId']!,
-              initialTab: initialTab,
-            ),
-          );
-        },
+        pageBuilder: (context, state) => _buildPageWithTransition(
+          state: state,
+          child: RoomDashboardScreen(roomId: state.pathParameters['roomId']!),
+        ),
       ),
       GoRoute(
         path: '/rooms/:roomId/subjects/:subjectId',
@@ -159,22 +187,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const Scaffold(body: Center(child: CircularProgressIndicator())),
         ),
       ),
-      GoRoute(
-        path: '/join-resource',
-        pageBuilder: (context, state) {
-          final roomId = state.uri.queryParameters['roomId'] ?? '';
-          final resourceId = state.uri.queryParameters['resourceId'] ?? '';
-          final code = state.uri.queryParameters['code'] ?? '';
-          return _buildPageWithTransition(
-            state: state,
-            child: ResourceJoinHandlerScreen(
-              roomId: roomId,
-              resourceId: resourceId,
-              roomCode: code,
-            ),
-          );
-        },
-      ),
     ],
   );
 });
@@ -191,7 +203,7 @@ CustomTransitionPage _buildPageWithTransition({
         opacity: animation,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0.0, 0.15),
+            begin: const Offset(0.0, 0.15), // Start slightly below (15% of screen height)
             end: Offset.zero,
           ).animate(
             CurvedAnimation(
