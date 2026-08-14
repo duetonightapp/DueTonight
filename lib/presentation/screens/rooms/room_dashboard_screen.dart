@@ -21,6 +21,10 @@ import 'package:mime/mime.dart';
 import '../../providers/attachment_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../data/models/room_personal_reminder_model.dart';
+import '../../../data/models/room_study_resource_model.dart';
+import '../../providers/study_resource_provider.dart';
+import '../../widgets/study_resource_upload_sheet.dart';
+import 'study_resource_viewer_screen.dart';
 
 class RoomDashboardScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -154,6 +158,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                   },
                 ),
                 _RoomAssignmentsTab(roomId: widget.roomId),
+                _RoomStudyResourcesTab(roomId: widget.roomId),
                 _RoomAnnouncementsTab(
                   roomId: widget.roomId,
                   onSwitchTab: (index) {
@@ -167,7 +172,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
               ],
             ),
           ),
-          floatingActionButton: (canPost && (_currentIndex == 1 || _currentIndex == 2))
+          floatingActionButton: (canPost && (_currentIndex == 1 || _currentIndex == 2 || _currentIndex == 3))
               ? FloatingActionButton(
                   onPressed: () {
                     if (_currentIndex == 1) {
@@ -178,6 +183,13 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                         builder: (_) => RoomAssignmentSheet(roomId: widget.roomId),
                       );
                     } else if (_currentIndex == 2) {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => StudyResourceUploadSheet(roomId: widget.roomId),
+                      );
+                    } else if (_currentIndex == 3) {
                       showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
@@ -265,7 +277,8 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           children: [
             _buildNavBarItem(0, Icons.home_rounded, Icons.home_outlined),
             _buildNavBarItem(1, Icons.assignment_rounded, Icons.assignment_outlined),
-            _buildNavBarItem(2, Icons.campaign_rounded, Icons.campaign_outlined),
+            _buildNavBarItem(2, Icons.menu_book_rounded, Icons.menu_book_outlined),
+            _buildNavBarItem(3, Icons.campaign_rounded, Icons.campaign_outlined),
           ],
         ),
       ),
@@ -4582,3 +4595,418 @@ class _RoomMembersSheet extends StatelessWidget {
     );
   }
 }
+
+class _RoomStudyResourcesTab extends ConsumerStatefulWidget {
+  final String roomId;
+
+  const _RoomStudyResourcesTab({required this.roomId});
+
+  @override
+  ConsumerState<_RoomStudyResourcesTab> createState() =>
+      __RoomStudyResourcesTabState();
+}
+
+class __RoomStudyResourcesTabState
+    extends ConsumerState<_RoomStudyResourcesTab> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resourcesAsync = ref.watch(roomStudyResourcesProvider(widget.roomId));
+    final role = ref.watch(currentRoomRoleProvider(widget.roomId));
+    final roomAsync = ref.watch(roomDetailsProvider(widget.roomId));
+    final canDelete = role == 'owner' || role == 'moderator';
+
+    return Container(
+      color: Colors.black,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(roomStudyResourcesProvider(widget.roomId));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Study Resources',
+                      style: GoogleFonts.unbounded(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Curated course materials, presentations, and documents',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val.trim().toLowerCase();
+                        });
+                      },
+                      style: GoogleFonts.inter(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Search study resources...',
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: Colors.white.withOpacity(0.4),
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded,
+                                    color: Colors.white54),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: AppTheme.surfaceColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: Colors.white.withOpacity(0.06),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: Colors.white.withOpacity(0.06),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            resourcesAsync.when(
+              data: (resources) {
+                final filtered = resources.where((r) {
+                  if (_searchQuery.isEmpty) return true;
+                  final titleMatch =
+                      r.title.toLowerCase().contains(_searchQuery);
+                  final descMatch = r.description != null &&
+                      r.description!.toLowerCase().contains(_searchQuery);
+                  return titleMatch || descMatch;
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyState(
+                      icon: Icons.menu_book_outlined,
+                      message: _searchQuery.isEmpty
+                          ? 'No study resources uploaded'
+                          : 'No matching study resources found',
+                      subtitle: _searchQuery.isEmpty
+                          ? 'Moderators can upload PDF, PPT, and DOCX materials.'
+                          : 'Try searching with a different key term.',
+                    ),
+                  );
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final resource = filtered[index];
+                        return _buildResourceCard(
+                          context: context,
+                          resource: resource,
+                          canDelete: canDelete,
+                          roomCode: roomAsync.value?.roomCode ?? '',
+                        );
+                      },
+                      childCount: filtered.length,
+                    ),
+                  ),
+                );
+              },
+              loading: () => const SliverFillRemaining(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              error: (err, stack) => SliverFillRemaining(
+                child: Center(
+                  child: Text(
+                    'Error loading study resources: $err',
+                    style: const TextStyle(color: AppTheme.errorColor),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResourceCard({
+    required BuildContext context,
+    required RoomStudyResource resource,
+    required bool canDelete,
+    required String roomCode,
+  }) {
+    Color badgeColor;
+    IconData fileIcon;
+
+    if (resource.isPdf) {
+      badgeColor = const Color(0xFFEF4444);
+      fileIcon = Icons.picture_as_pdf_rounded;
+    } else if (resource.isPpt) {
+      badgeColor = const Color(0xFFF97316);
+      fileIcon = Icons.slideshow_rounded;
+    } else {
+      badgeColor = const Color(0xFF3B82F6);
+      fileIcon = Icons.description_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(fileIcon, color: badgeColor, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        resource.title,
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              resource.fileExtension.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            resource.formattedSize,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (canDelete)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppTheme.errorColor,
+                      size: 20,
+                    ),
+                    onPressed: () => _confirmDelete(resource),
+                  ),
+              ],
+            ),
+            if (resource.description != null &&
+                resource.description!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                resource.description!,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: Colors.white.withOpacity(0.7),
+                  height: 1.4,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StudyResourceViewerScreen(
+                            resource: resource,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.visibility_rounded, size: 18),
+                    label: const Text('Preview'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _shareResource(resource, roomCode),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: const Text('Share Link'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.secondaryColor,
+                      side: BorderSide(
+                        color: AppTheme.secondaryColor.withOpacity(0.5),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareResource(
+      RoomStudyResource resource, String roomCode) async {
+    final origin = kIsWeb ? Uri.base.origin : 'https://duetonight.web.app';
+    final shareUrl =
+        '$origin/#/join-resource?roomId=${widget.roomId}&resourceId=${resource.id}&code=$roomCode';
+
+    await Share.share(
+      '📚 Study Resource: "${resource.title}" on DueTonight!\nJoin the room & preview: $shareUrl',
+    );
+
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Resource share link copied to clipboard!'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDelete(RoomStudyResource resource) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceColor,
+        title: const Text('Delete Resource?',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Are you sure you want to delete "${resource.title}"?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final repo = ref.read(studyResourceRepositoryProvider);
+      await repo.deleteResource(
+        resourceId: resource.id,
+        roomId: widget.roomId,
+      );
+      ref.invalidate(roomStudyResourcesProvider(widget.roomId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Study resource deleted.'),
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+}
+
