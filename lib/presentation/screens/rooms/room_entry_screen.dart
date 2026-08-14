@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/room_provider.dart';
 import '../../../data/models/room_membership_model.dart';
-import '../../widgets/responsive_container.dart';
 
 class RoomEntryScreen extends ConsumerWidget {
   const RoomEntryScreen({super.key});
@@ -51,9 +50,8 @@ class RoomEntryScreen extends ConsumerWidget {
       body: Container(
         color: Colors.black,
         child: SafeArea(
-          child: ResponsiveContainer(
-            child: RefreshIndicator(
-              onRefresh: () => ref.refresh(myRoomsProvider.future),
+          child: RefreshIndicator(
+            onRefresh: () => ref.refresh(myRoomsProvider.future),
             color: AppTheme.primaryColor,
             backgroundColor: AppTheme.cardColor,
             child: ListView(
@@ -126,7 +124,7 @@ class RoomEntryScreen extends ConsumerWidget {
           ),
         ),
       ),
-    ),);
+    );
   }
 }
 

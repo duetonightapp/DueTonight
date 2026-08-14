@@ -14,15 +14,17 @@ import '../../providers/auth_provider.dart';
 import '../../../data/models/room_assignment_model.dart';
 import '../../../data/models/room_announcement_model.dart';
 import '../../widgets/room_assignment_card.dart';
-import '../../widgets/responsive_container.dart';
-import 'dart:io' as io;
-import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 import '../../providers/attachment_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../data/models/room_personal_reminder_model.dart';
+import '../../../data/models/room_study_resource_model.dart';
+import '../../providers/study_resource_provider.dart';
+import '../../widgets/study_resource_upload_sheet.dart';
+import 'study_resource_viewer_screen.dart';
 
 class RoomDashboardScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -55,10 +57,6 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     final role = ref.watch(currentRoomRoleProvider(widget.roomId));
     final canPost = role == 'owner' || role == 'moderator';
     final canDelete = role == 'owner' || role == 'moderator';
-
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 768;
-    final isDesktop = width >= 1024;
 
     return roomAsync.when(
       data: (room) {
@@ -141,88 +139,40 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           ),
           body: Container(
             color: Colors.black,
-            child: Row(
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
               children: [
-                if (!isMobile) ...[
-                  NavigationRail(
-                    selectedIndex: _currentIndex,
-                    onDestinationSelected: (index) {
-                      _pageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
-                    backgroundColor: AppTheme.surfaceColor,
-                    extended: isDesktop,
-                    labelType: isDesktop ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-                    unselectedIconTheme: IconThemeData(color: Colors.white.withOpacity(0.4)),
-                    selectedIconTheme: const IconThemeData(color: AppTheme.secondaryColor),
-                    unselectedLabelTextStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                    selectedLabelTextStyle: const TextStyle(color: AppTheme.secondaryColor, fontSize: 12, fontWeight: FontWeight.bold),
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: Text('Home'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.assignment_outlined),
-                        selectedIcon: Icon(Icons.assignment_rounded),
-                        label: Text('Assignments'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.campaign_outlined),
-                        selectedIcon: Icon(Icons.campaign_rounded),
-                        label: Text('Announcements'),
-                      ),
-                    ],
-                  ),
-                  const VerticalDivider(thickness: 1, width: 1, color: Colors.white10),
-                ],
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentIndex = index;
-                      });
-                    },
-                    children: [
-                      ResponsiveContainer(
-                        child: _RoomHomeTab(
-                          roomId: widget.roomId,
-                          onSwitchTab: (index) {
-                            _pageController.animateToPage(
-                              index,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                            );
-                          },
-                        ),
-                      ),
-                      ResponsiveContainer(
-                        child: _RoomAssignmentsTab(roomId: widget.roomId),
-                      ),
-                      ResponsiveContainer(
-                        child: _RoomAnnouncementsTab(
-                          roomId: widget.roomId,
-                          onSwitchTab: (index) {
-                            _pageController.animateToPage(
-                              index,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                _RoomHomeTab(
+                  roomId: widget.roomId,
+                  onSwitchTab: (index) {
+                    _pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                ),
+                _RoomAssignmentsTab(roomId: widget.roomId),
+                _RoomStudyResourcesTab(roomId: widget.roomId),
+                _RoomAnnouncementsTab(
+                  roomId: widget.roomId,
+                  onSwitchTab: (index) {
+                    _pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
                 ),
               ],
             ),
           ),
-          floatingActionButton: (canPost && (_currentIndex == 1 || _currentIndex == 2))
+          floatingActionButton: (canPost && (_currentIndex == 1 || _currentIndex == 2 || _currentIndex == 3))
               ? FloatingActionButton(
                   onPressed: () {
                     if (_currentIndex == 1) {
@@ -237,6 +187,13 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
+                        builder: (_) => StudyResourceUploadSheet(roomId: widget.roomId),
+                      );
+                    } else if (_currentIndex == 3) {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
                         builder: (_) => RoomAnnouncementSheet(roomId: widget.roomId),
                       );
                     }
@@ -245,7 +202,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                   child: const Icon(Icons.add_rounded, size: 28),
                 )
               : null,
-          bottomNavigationBar: isMobile ? _buildBottomNavBar(context) : null,
+          bottomNavigationBar: _buildBottomNavBar(context),
         );
       },
       loading: () =>
@@ -320,7 +277,8 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           children: [
             _buildNavBarItem(0, Icons.home_rounded, Icons.home_outlined),
             _buildNavBarItem(1, Icons.assignment_rounded, Icons.assignment_outlined),
-            _buildNavBarItem(2, Icons.campaign_rounded, Icons.campaign_outlined),
+            _buildNavBarItem(2, Icons.menu_book_rounded, Icons.menu_book_outlined),
+            _buildNavBarItem(3, Icons.campaign_rounded, Icons.campaign_outlined),
           ],
         ),
       ),
@@ -928,20 +886,12 @@ class _RoomAssignmentsTabState extends ConsumerState<_RoomAssignmentsTab> {
                 );
               } else {
                 // By Priority grouping view
-                final completedIds = ref.watch(completedAssignmentsProvider);
-
-                final pendingAssignments =
-                    assignments.where((a) => !completedIds.contains(a.id)).toList();
-                final completedAssignmentsList =
-                    assignments.where((a) => completedIds.contains(a.id)).toList();
-
                 final highPriority = <RoomAssignment>[];
                 final medPriority = <RoomAssignment>[];
                 final lowPriority = <RoomAssignment>[];
 
-                for (final a in pendingAssignments) {
-                  final priority =
-                      a.deadline != null ? _getPriority(a.deadline!) : 'LOW';
+                for (final a in assignments) {
+                  final priority = a.deadline != null ? _getPriority(a.deadline!) : 'LOW';
                   if (priority == 'HIGH') {
                     highPriority.add(a);
                   } else if (priority == 'MEDIUM') {
@@ -960,68 +910,20 @@ class _RoomAssignmentsTabState extends ConsumerState<_RoomAssignmentsTab> {
                 highPriority.sort(sorter);
                 medPriority.sort(sorter);
                 lowPriority.sort(sorter);
-                completedAssignmentsList.sort(sorter);
 
                 final widgets = <Widget>[];
 
-                // 1. Pending (Not Completed) Sub-Section as per Priority
                 if (highPriority.isNotEmpty) {
-                  widgets.add(const _PriorityHeader(
-                    title: 'HIGH PRIORITY (PENDING)',
-                    color: AppTheme.overdueColor,
-                  ));
-                  widgets.addAll(
-                    highPriority.map((a) => RoomAssignmentCard(assignment: a)),
-                  );
+                  widgets.add(const _PriorityHeader(title: 'HIGH PRIORITY', color: AppTheme.overdueColor));
+                  widgets.addAll(highPriority.map((a) => RoomAssignmentCard(assignment: a)));
                 }
                 if (medPriority.isNotEmpty) {
-                  widgets.add(const _PriorityHeader(
-                    title: 'MEDIUM PRIORITY (PENDING)',
-                    color: AppTheme.urgentColor,
-                  ));
-                  widgets.addAll(
-                    medPriority.map((a) => RoomAssignmentCard(assignment: a)),
-                  );
+                  widgets.add(const _PriorityHeader(title: 'MEDIUM PRIORITY', color: AppTheme.urgentColor));
+                  widgets.addAll(medPriority.map((a) => RoomAssignmentCard(assignment: a)));
                 }
                 if (lowPriority.isNotEmpty) {
-                  widgets.add(const _PriorityHeader(
-                    title: 'LOW PRIORITY (PENDING)',
-                    color: AppTheme.safeColor,
-                  ));
-                  widgets.addAll(
-                    lowPriority.map((a) => RoomAssignmentCard(assignment: a)),
-                  );
-                }
-
-                if (pendingAssignments.isEmpty && completedAssignmentsList.isNotEmpty) {
-                  widgets.add(
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          '🎉 All assignments completed!',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF10B981),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                // 2. Completed Sub-Section
-                if (completedAssignmentsList.isNotEmpty) {
-                  widgets.add(
-                    _PriorityHeader(
-                      title: 'COMPLETED (${completedAssignmentsList.length})',
-                      color: const Color(0xFF10B981),
-                    ),
-                  );
-                  widgets.addAll(
-                    completedAssignmentsList.map((a) => RoomAssignmentCard(assignment: a)),
-                  );
+                  widgets.add(const _PriorityHeader(title: 'LOW PRIORITY', color: AppTheme.safeColor));
+                  widgets.addAll(lowPriority.map((a) => RoomAssignmentCard(assignment: a)));
                 }
 
                 return ListView(
@@ -1207,7 +1109,6 @@ class _RoomMembersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membersAsync = ref.watch(roomMembersProvider(roomId));
-    final subscribedUserIds = ref.watch(roomPushSubscribedUserIdsProvider(roomId)).valueOrNull ?? {};
     final role = ref.watch(currentRoomRoleProvider(roomId));
     final repo = ref.read(roomRepositoryProvider);
     final canManage = role == 'owner' || role == 'moderator';
@@ -1231,69 +1132,15 @@ class _RoomMembersTab extends ConsumerWidget {
 
             return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: members.length + 1,
+              itemCount: members.length,
               itemBuilder: (context, index) {
-                if (index == 0) {
-                  final subscribedCount = members.where((m) => subscribedUserIds.contains(m.userId)).length;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.notifications_active_outlined,
-                            color: Color(0xFF10B981),
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$subscribedCount of ${members.length} Members Subscribed 🔔',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Members with 🔔 will receive instant home screen push notifications.',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final member = members[index - 1];
+                final member = members[index];
                 final profile = profiles[member.userId];
                 final rawName = profile?['full_name'] as String?;
                 final displayName =
                     (rawName != null && rawName.trim().isNotEmpty)
                     ? rawName.trim()
                     : 'Member';
-                final isSubscribed = subscribedUserIds.contains(member.userId);
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -1341,78 +1188,28 @@ class _RoomMembersTab extends ConsumerWidget {
                           fontSize: 15,
                         ),
                       ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: member.role == 'owner'
-                                    ? AppTheme.primaryColor.withOpacity(0.12)
-                                    : Colors.white.withOpacity(0.04),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                member.role.toUpperCase(),
-                                style: TextStyle(
-                                  color: member.role == 'owner'
-                                      ? AppTheme.primaryColor
-                                      : Colors.white.withOpacity(0.4),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 10,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isSubscribed
-                                    ? const Color(0xFF10B981).withOpacity(0.15)
-                                    : Colors.white.withOpacity(0.04),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: isSubscribed
-                                      ? const Color(0xFF10B981).withOpacity(0.3)
-                                      : Colors.white.withOpacity(0.06),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    isSubscribed
-                                        ? Icons.notifications_active
-                                        : Icons.notifications_off_outlined,
-                                    size: 11,
-                                    color: isSubscribed
-                                        ? const Color(0xFF10B981)
-                                        : Colors.white38,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    isSubscribed ? 'Subscribed' : 'Not Subscribed',
-                                    style: TextStyle(
-                                      color: isSubscribed
-                                          ? const Color(0xFF10B981)
-                                          : Colors.white38,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                      subtitle: Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: member.role == 'owner'
+                              ? AppTheme.primaryColor.withOpacity(0.12)
+                              : Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          member.role.toUpperCase(),
+                          style: TextStyle(
+                            color: member.role == 'owner'
+                                ? AppTheme.primaryColor
+                                : Colors.white.withOpacity(0.4),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 10,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                       trailing: () {
@@ -2206,7 +2003,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
   String? _selectedSubjectName;
   DateTime? _deadline;
   bool _isLoading = false;
-  final List<PlatformFile> _selectedFiles = [];
+  final List<File> _selectedFiles = [];
 
   @override
   void dispose() {
@@ -2220,8 +2017,8 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     final result = await picker.pickImage(source: ImageSource.gallery);
     if (result == null) return;
     
-    final bytes = await result.readAsBytes();
-    final size = bytes.length;
+    final file = File(result.path);
+    final size = await file.length();
     if (size > 5 * 1024 * 1024) {
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
@@ -2234,12 +2031,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     }
 
     setState(() {
-      _selectedFiles.add(PlatformFile(
-        name: result.name,
-        size: size,
-        bytes: bytes,
-        path: kIsWeb ? null : result.path,
-      ));
+      _selectedFiles.add(file);
     });
   }
 
@@ -2247,15 +2039,16 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
     );
-    if (result == null) return;
+    if (result == null || result.files.single.path == null) return;
     
-    final file = result.files.single;
-    final ext = p.extension(file.name).toLowerCase().replaceFirst('.', '');
+    final pathStr = result.files.single.path!;
+    final file = File(pathStr);
+    final ext = p.extension(pathStr).toLowerCase().replaceFirst('.', '');
     
-    if (!['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'].contains(ext)) {
+    if (!['pdf', 'jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
-          content: const Text('Unsupported file type. Please select a PDF, Word Document, or Image.'),
+          content: const Text('Unsupported file type. Please select a PDF or an Image.'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -2263,19 +2056,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
       return;
     }
 
-    final Uint8List bytes;
-    final int size;
-    if (kIsWeb) {
-      if (file.bytes == null) return;
-      bytes = file.bytes!;
-      size = bytes.length;
-    } else {
-      if (file.path == null) return;
-      final ioFile = io.File(file.path!);
-      bytes = await ioFile.readAsBytes();
-      size = bytes.length;
-    }
-
+    final size = await file.length();
     if (size > 5 * 1024 * 1024) {
       _messengerKey.currentState?.showSnackBar(
         SnackBar(
@@ -2288,12 +2069,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
     }
 
     setState(() {
-      _selectedFiles.add(PlatformFile(
-        name: file.name,
-        size: size,
-        bytes: bytes,
-        path: kIsWeb ? null : file.path,
-      ));
+      _selectedFiles.add(file);
     });
   }
 
@@ -2336,11 +2112,11 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
         final attachmentRepo = ref.read(roomAttachmentRepositoryProvider);
 
         for (final file in _selectedFiles) {
-          final fileName = file.name;
-          final mimeType = lookupMimeType(fileName) ?? 'application/octet-stream';
+          final fileName = p.basename(file.path);
+          final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
 
           final uploadResult = await uploadService.uploadFile(
-            fileBytes: file.bytes!,
+            file: file,
             roomId: widget.roomId,
             fileName: fileName,
             onProgress: (_) {},
@@ -2661,7 +2437,7 @@ class _RoomAssignmentSheetState extends ConsumerState<RoomAssignmentSheet> {
                             itemCount: _selectedFiles.length,
                             itemBuilder: (context, index) {
                               final file = _selectedFiles[index];
-                              final fileName = file.name;
+                              final fileName = p.basename(file.path);
                               return ListTile(
                                 dense: true,
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
@@ -3009,23 +2785,34 @@ class _DetailRow extends StatelessWidget {
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    onTap: () async {
-                      final origin = kIsWeb ? Uri.base.origin : 'https://my.duetonight.app';
-                      final joinLink = '$origin/rooms/join?code=$value';
-                      await Clipboard.setData(ClipboardData(text: joinLink));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Join link copied to clipboard!'),
-                            backgroundColor: AppTheme.primaryColor,
-                            duration: Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                      if (!kIsWeb) {
-                        await Share.share('Join my classroom room on DueTonight!\nLink: $joinLink');
-                      }
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: value));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('$label copied to clipboard!'),
+                          backgroundColor: AppTheme.primaryColor,
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.all(6.0),
+                      child: Icon(
+                        Icons.copy_rounded,
+                        size: 16,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      Share.share('Join my classroom room on DueTonight!\nRoom Code: $value');
                     },
                     child: const Padding(
                       padding: EdgeInsets.all(6.0),
@@ -4808,3 +4595,418 @@ class _RoomMembersSheet extends StatelessWidget {
     );
   }
 }
+
+class _RoomStudyResourcesTab extends ConsumerStatefulWidget {
+  final String roomId;
+
+  const _RoomStudyResourcesTab({required this.roomId});
+
+  @override
+  ConsumerState<_RoomStudyResourcesTab> createState() =>
+      __RoomStudyResourcesTabState();
+}
+
+class __RoomStudyResourcesTabState
+    extends ConsumerState<_RoomStudyResourcesTab> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resourcesAsync = ref.watch(roomStudyResourcesProvider(widget.roomId));
+    final role = ref.watch(currentRoomRoleProvider(widget.roomId));
+    final roomAsync = ref.watch(roomDetailsProvider(widget.roomId));
+    final canDelete = role == 'owner' || role == 'moderator';
+
+    return Container(
+      color: Colors.black,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(roomStudyResourcesProvider(widget.roomId));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Study Resources',
+                      style: GoogleFonts.unbounded(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Curated course materials, presentations, and documents',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val.trim().toLowerCase();
+                        });
+                      },
+                      style: GoogleFonts.inter(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Search study resources...',
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: Colors.white.withOpacity(0.4),
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded,
+                                    color: Colors.white54),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: AppTheme.surfaceColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: Colors.white.withOpacity(0.06),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: Colors.white.withOpacity(0.06),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            resourcesAsync.when(
+              data: (resources) {
+                final filtered = resources.where((r) {
+                  if (_searchQuery.isEmpty) return true;
+                  final titleMatch =
+                      r.title.toLowerCase().contains(_searchQuery);
+                  final descMatch = r.description != null &&
+                      r.description!.toLowerCase().contains(_searchQuery);
+                  return titleMatch || descMatch;
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyState(
+                      icon: Icons.menu_book_outlined,
+                      message: _searchQuery.isEmpty
+                          ? 'No study resources uploaded'
+                          : 'No matching study resources found',
+                      subtitle: _searchQuery.isEmpty
+                          ? 'Moderators can upload PDF, PPT, and DOCX materials.'
+                          : 'Try searching with a different key term.',
+                    ),
+                  );
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final resource = filtered[index];
+                        return _buildResourceCard(
+                          context: context,
+                          resource: resource,
+                          canDelete: canDelete,
+                          roomCode: roomAsync.value?.roomCode ?? '',
+                        );
+                      },
+                      childCount: filtered.length,
+                    ),
+                  ),
+                );
+              },
+              loading: () => const SliverFillRemaining(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              error: (err, stack) => SliverFillRemaining(
+                child: Center(
+                  child: Text(
+                    'Error loading study resources: $err',
+                    style: const TextStyle(color: AppTheme.errorColor),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResourceCard({
+    required BuildContext context,
+    required RoomStudyResource resource,
+    required bool canDelete,
+    required String roomCode,
+  }) {
+    Color badgeColor;
+    IconData fileIcon;
+
+    if (resource.isPdf) {
+      badgeColor = const Color(0xFFEF4444);
+      fileIcon = Icons.picture_as_pdf_rounded;
+    } else if (resource.isPpt) {
+      badgeColor = const Color(0xFFF97316);
+      fileIcon = Icons.slideshow_rounded;
+    } else {
+      badgeColor = const Color(0xFF3B82F6);
+      fileIcon = Icons.description_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(fileIcon, color: badgeColor, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        resource.title,
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              resource.fileExtension.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            resource.formattedSize,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (canDelete)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppTheme.errorColor,
+                      size: 20,
+                    ),
+                    onPressed: () => _confirmDelete(resource),
+                  ),
+              ],
+            ),
+            if (resource.description != null &&
+                resource.description!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                resource.description!,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: Colors.white.withOpacity(0.7),
+                  height: 1.4,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StudyResourceViewerScreen(
+                            resource: resource,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.visibility_rounded, size: 18),
+                    label: const Text('Preview'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _shareResource(resource, roomCode),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: const Text('Share Link'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.secondaryColor,
+                      side: BorderSide(
+                        color: AppTheme.secondaryColor.withOpacity(0.5),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareResource(
+      RoomStudyResource resource, String roomCode) async {
+    final origin = kIsWeb ? Uri.base.origin : 'https://duetonight.web.app';
+    final shareUrl =
+        '$origin/#/join-resource?roomId=${widget.roomId}&resourceId=${resource.id}&code=$roomCode';
+
+    await Share.share(
+      '📚 Study Resource: "${resource.title}" on DueTonight!\nJoin the room & preview: $shareUrl',
+    );
+
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Resource share link copied to clipboard!'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDelete(RoomStudyResource resource) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceColor,
+        title: const Text('Delete Resource?',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Are you sure you want to delete "${resource.title}"?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final repo = ref.read(studyResourceRepositoryProvider);
+      await repo.deleteResource(
+        resourceId: resource.id,
+        roomId: widget.roomId,
+      );
+      ref.invalidate(roomStudyResourcesProvider(widget.roomId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Study resource deleted.'),
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+}
+

@@ -5,8 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/room_provider.dart';
 
 class RoomJoinScreen extends ConsumerStatefulWidget {
-  final String? initialCode;
-  const RoomJoinScreen({super.key, this.initialCode});
+  const RoomJoinScreen({super.key});
 
   @override
   ConsumerState<RoomJoinScreen> createState() => _RoomJoinScreenState();
@@ -14,18 +13,8 @@ class RoomJoinScreen extends ConsumerStatefulWidget {
 
 class _RoomJoinScreenState extends ConsumerState<RoomJoinScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final _codeController = TextEditingController(text: widget.initialCode);
+  final _codeController = TextEditingController();
   bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _submit();
-      });
-    }
-  }
 
   @override
   void dispose() {

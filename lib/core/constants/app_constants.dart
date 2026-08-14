@@ -8,12 +8,9 @@ class AppConstants {
   // For web (local dev), update to http://localhost:3000
   // For production, set to the actual deployed backend URL (e.g. https://api.duetonight.app)
   static const String backendUrl = 'http://10.0.2.2:3000';
-  static const String backendUrlWeb = 'https://duetonight-backend.onrender.com';
+  static const String backendUrlWeb = 'http://localhost:3000';
   static const String cloudinaryCloudName = 'dbzl3odk6';
   static const String cloudinaryUploadPreset = 'duetonight_uploads';
   static const String vapidPublicKey =
       'BJD0k-xLMppRIu6ARcTQVCpO17S-ZVS-TW6AgyCDOqX7Lzl_yQY1v4eeWGodRHibzSGaodeYtjid8lSU2qKIDVI';
-  static const String posthogApiKey =
-      'phc_pkkYqXuviZRBqmU5G7FLJkjYWJoPNVo7qrHJp6o92AhA';
-  static const String posthogHost = 'https://us.i.posthog.com';
 }

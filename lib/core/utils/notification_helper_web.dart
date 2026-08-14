@@ -1,10 +1,8 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
 
-/// Gets the current notification permission status via `Notification.permission`.
 Future<String> getNotificationPermissionStatus() async {
   try {
     final notificationCtor = js.context['Notification'];
@@ -17,7 +15,6 @@ Future<String> getNotificationPermissionStatus() async {
   return 'unsupported';
 }
 
-/// Requests notification permission via `dueTonightPush.requestPermissionWithCallback`.
 Future<String> requestNotificationPermission() async {
   try {
     final push = js.context['dueTonightPush'];
@@ -30,7 +27,6 @@ Future<String> requestNotificationPermission() async {
       }),
     ]);
 
-    // Timeout in case callback never fires
     Future.delayed(const Duration(seconds: 10), () {
       if (!completer.isCompleted) {
         debugPrint('requestPermission TIMEOUT');
@@ -45,7 +41,6 @@ Future<String> requestNotificationPermission() async {
   return 'denied';
 }
 
-/// Subscribes to push via `dueTonightPush.subscribeWithCallback`.
 Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
   try {
     final push = js.context['dueTonightPush'];
@@ -65,17 +60,11 @@ Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
           final auth = parsed['auth'] as String?;
           if (endpoint != null && p256dh != null && auth != null) {
             debugPrint('subscribeUserToPush: SUCCESS');
-            completer.complete({
-              'endpoint': endpoint,
-              'p256dh': p256dh,
-              'auth': auth,
-            });
+            completer.complete({'endpoint': endpoint, 'p256dh': p256dh, 'auth': auth});
           } else {
-            debugPrint('subscribeUserToPush: incomplete data');
             completer.complete(null);
           }
         } catch (e) {
-          debugPrint('subscribeUserToPush: parse error: $e');
           completer.complete(null);
         }
       }),
@@ -85,7 +74,6 @@ Future<Map<String, String>?> subscribeUserToPush(String publicVapidKey) async {
       }),
     ]);
 
-    // Timeout in case callbacks never fire
     Future.delayed(const Duration(seconds: 15), () {
       if (!completer.isCompleted) {
         debugPrint('subscribeUserToPush TIMEOUT');

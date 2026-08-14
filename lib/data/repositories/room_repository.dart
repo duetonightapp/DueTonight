@@ -237,7 +237,7 @@ class RoomRepository {
 
     final assignmentId = response['id'] as String;
 
-    await _triggerNotification(
+    _triggerNotification(
       roomId: roomId,
       type: 'assignment',
       title: title,
@@ -259,7 +259,7 @@ class RoomRepository {
       'created_by': _client.auth.currentUser?.id,
     });
 
-    await _triggerNotification(
+    _triggerNotification(
       roomId: roomId,
       type: 'announcement',
       title: title,
@@ -291,19 +291,11 @@ class RoomRepository {
     }
 
     try {
-      String url;
-      if (kIsWeb) {
-        final origin = Uri.base.origin;
-        if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
-          url = '${AppConstants.backendUrlWeb}/api/notifications/notify';
-        } else {
-          url = '$origin/api/notifications/notify';
-        }
-      } else {
-        url = '${AppConstants.backendUrl}/api/notifications/notify';
-      }
+      // Use the web-specific backend URL on web, otherwise the native backend URL
+      final baseUrl = kIsWeb ? AppConstants.backendUrlWeb : AppConstants.backendUrl;
+      String url = '$baseUrl/api/notifications/notify';
 
-      final response = await http.post(
+      await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -315,7 +307,6 @@ class RoomRepository {
           'uploaderId': userId,
         }),
       );
-      debugPrint('Push notification response: ${response.statusCode} - ${response.body}');
     } catch (e) {
       debugPrint('Error triggering push notification: $e');
     }
@@ -390,7 +381,7 @@ class RoomRepository {
       }
     } catch (e) {
       // Log/ignore storage deletion failure to ensure DB deletion always proceeds
-      debugPrint('Failed to delete assignment attachments from storage: $e');
+      print('Failed to delete assignment attachments from storage: $e');
     }
 
     // 3. Delete attachments from DB
@@ -441,25 +432,5 @@ class RoomRepository {
       map[data['id'] as String] = data;
     }
     return map;
-  }
-
-  Future<Set<String>> fetchPushSubscribedUserIds(String roomId) async {
-    try {
-      final response = await _client.rpc(
-        'get_room_push_subscribed_user_ids',
-        params: {'p_room_id': roomId},
-      );
-      if (response == null) return {};
-      final rows = response as List;
-      final set = <String>{};
-      for (final row in rows) {
-        final uid = (row as Map)['user_id'] as String?;
-        if (uid != null) set.add(uid);
-      }
-      return set;
-    } catch (e) {
-      debugPrint('Error fetching push subscribed user IDs: $e');
-      return {};
-    }
   }
 }

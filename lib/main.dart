@@ -1,29 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'presentation/providers/auth_provider.dart';
-import 'core/utils/url_strategy_helper.dart';
 import 'presentation/widgets/notification_prompt_wrapper.dart';
 
 void main() async {
-  configureUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-  await Hive.openBox<String>('auth_redirect');
   
-  if (AppConstants.posthogApiKey.startsWith('phc_') &&
-      !AppConstants.posthogApiKey.contains('YOUR_')) {
-    final postHogConfig = PostHogConfig(AppConstants.posthogApiKey)
-      ..host = AppConstants.posthogHost
-      ..sessionReplay = true;
-    await Posthog().setup(postHogConfig);
-  }
-
   final hasValidConfig = AppConstants.supabaseUrl.startsWith('https://') &&
                          !AppConstants.supabaseUrl.contains('YOUR_');
   
@@ -36,9 +24,7 @@ void main() async {
   
   runApp(
     ProviderScope(
-      child: PostHogWidget(
-        child: DueTonightApp(showSetup: !hasValidConfig),
-      ),
+      child: DueTonightApp(showSetup: !hasValidConfig),
     ),
   );
 }
@@ -65,20 +51,9 @@ class _DueTonightAppState extends ConsumerState<DueTonightApp> {
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       debugPrint('Auth event: ${event.event}, session: ${event.session != null}');
       
-      final session = event.session;
-      if (session != null) {
+      if (event.session != null) {
         final user = ref.read(authStateProvider);
         debugPrint('Current auth state user: ${user?.email}');
-        
-        Posthog().identify(
-          userId: session.user.id,
-          userProperties: {
-            'email': session.user.email ?? '',
-            'name': user?.fullName ?? session.user.userMetadata?['full_name'] ?? '',
-          },
-        );
-      } else if (event.event == AuthChangeEvent.signedOut) {
-        Posthog().reset();
       }
     });
   }
@@ -115,7 +90,7 @@ class SetupScreen extends StatelessWidget {
       body: Container(
         color: Colors.black,
         child: SafeArea(
-          child: SingleChildScrollView(
+          child: Padding(
             padding: const EdgeInsets.all(28.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

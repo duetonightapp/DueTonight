@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/notification_helper.dart';
-import '../../routes/app_router.dart';
 import '../providers/auth_provider.dart';
 
 class NotificationPromptWrapper extends ConsumerStatefulWidget {
@@ -17,204 +16,167 @@ class NotificationPromptWrapper extends ConsumerStatefulWidget {
 }
 
 class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWrapper> {
-  String? _lastCheckedUserId;
+  bool _hasPrompted = false;
+
+
 
   Future<void> _checkPermissionsAndShowPrompt(String userId) async {
-    // 1. Brief delay to allow initial splash/auth route redirection to settle on destination screen
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-
-    try {
-      final router = ref.read(routerProvider);
-      final location = router.routeInformationProvider.value.uri.path;
-      if (location == '/splash' || location == '/login' || location == '/login-callback' || location == '/setup-name') {
-        debugPrint('Still on auth/splash route ($location), waiting 1s...');
-        await Future.delayed(const Duration(seconds: 1));
-        if (!mounted) return;
-      }
-    } catch (_) {}
-
     final status = await getNotificationPermissionStatus();
-    debugPrint('Browser notification permission status for user $userId: $status');
+    debugPrint('Browser notification permission status: $status');
 
-    // If browser status is already 'granted', register/refresh silently and exit. NEVER show prompt!
-    if (status == 'granted') {
-      debugPrint('Notification permission already granted by browser. Registering silently if needed.');
-      await _registerSubscriptionSilently(userId);
-      return;
-    }
+    if (status == 'default') {
+      if (!mounted) return;
 
-    // If browser status is 'denied', user blocked notifications in browser settings. Do not prompt.
-    if (status == 'denied') {
-      debugPrint('Notification permission explicitly denied in browser settings.');
-      return;
-    }
-
-    // 2. Browser status is 'default' (user has not decided yet).
-    // Check if the user ALREADY has an active push subscription record in the database
-    bool isSubscribedInDb = false;
-    try {
-      final client = Supabase.instance.client;
-      final existingSub = await client
-          .from('push_subscriptions')
-          .select('id')
-          .eq('user_id', userId)
-          .limit(1);
-
-      if (existingSub.isNotEmpty) {
-        isSubscribedInDb = true;
-        debugPrint('User $userId ALREADY has an active push subscription in DB.');
-      } else {
-        debugPrint('User $userId has NO active push subscription in DB.');
+      // Show Dialog and SnackBar (toast) at the same time
+      try {
+        _showPromptDialog(userId);
+      } catch (e, stack) {
+        debugPrint('Error showing prompt dialog: $e\n$stack');
       }
-    } catch (e) {
-      debugPrint('Error checking push subscription DB status for user $userId: $e');
-    }
-
-    // 3. If user is already subscribed in DB, do not show prompt dialog
-    if (isSubscribedInDb) {
-      return;
-    }
-
-    // 4. If user has NOT granted permission yet AND is NOT subscribed in DB: SHOW THE PROMPT DIALOG!
-    if (!mounted) return;
-    try {
-      _showPromptDialog(userId);
-    } catch (e, stack) {
-      debugPrint('Error showing prompt dialog: $e\n$stack');
+      try {
+        _showPromptSnackBar(userId);
+      } catch (e, stack) {
+        debugPrint('Error showing prompt snackbar: $e\n$stack');
+      }
+    } else if (status == 'granted') {
+      // If already granted, ensure the subscription is registered in the database
+      _registerSubscriptionSilently(userId);
     }
   }
 
+  void _showPromptSnackBar(String userId) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.notifications_outlined, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Please enable notifications to receive real-time class updates!',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Enable',
+          textColor: Colors.tealAccent,
+          onPressed: () {
+            // Dismiss current SnackBar and trigger request
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            _triggerPermissionRequest(userId);
+          },
+        ),
+        duration: const Duration(seconds: 15),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: const Color(0xFF6750A4), // Primary Deep Purple color
+      ),
+    );
+  }
+
   void _showPromptDialog(String userId) {
-    final dialogContext = rootNavigatorKey.currentContext ?? context;
+    // Capture these BEFORE showDialog to avoid null context inside dialog builder
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
     showDialog(
-      context: dialogContext,
+      context: context,
       barrierDismissible: false,
-      builder: (BuildContext dialogCtx) {
-        final navigator = Navigator.of(dialogCtx);
+      builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          backgroundColor: const Color(0xFF1E1C29), // Rich dark purple theme
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFF1E1E1E), // Fallback dark card color
           child: Container(
-            padding: const EdgeInsets.all(28),
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Stack(
+            padding: const EdgeInsets.all(24),
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6750A4).withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active_outlined,
+                    color: Color(0xFF9880e6), // Bright purple tone
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Enable Push Notifications',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Never miss a deadline! Enable notifications to receive instant updates when classmates upload assignments, announcements, or solutions.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.7),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
                   children: [
-                    const SizedBox(height: 12),
-                    // High impact icon container
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF4C4C).withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFFF4C4C).withValues(alpha: 0.3),
-                          width: 2,
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          navigator.pop();
+                          messenger.hideCurrentSnackBar();
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          'Later',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                      child: const Icon(
-                        Icons.notifications_active,
-                        color: Color(0xFFFF5252),
-                        size: 48,
-                      ),
                     ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Don\'t Miss Out on Deadlines!',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 14),
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.white.withValues(alpha: 0.8),
-                          height: 1.5,
-                        ),
-                        children: const [
-                          TextSpan(
-                            text: 'It will be ',
-                          ),
-                          TextSpan(
-                            text: 'YOUR LOSS',
-                            style: TextStyle(
-                              color: Color(0xFFFF5252),
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                          TextSpan(
-                            text: ' if you don\'t allow notifications! You won\'t get instant alerts when classmates post new assignments, announcements, or solutions.',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    // Big prominent CTA button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: ElevatedButton(
                         onPressed: () {
                           navigator.pop();
+                          messenger.hideCurrentSnackBar();
                           _triggerPermissionRequest(userId);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6750A4),
                           foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: const Color(0xFF6750A4).withValues(alpha: 0.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(10),
                           ),
+                          elevation: 0,
                         ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_active_outlined, size: 22),
-                            SizedBox(width: 10),
-                            Text(
-                              'Enable Notifications Now',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                        child: const Text(
+                          'Enable',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
                   ],
-                ),
-                // Small subtle close button on top corner
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: Colors.white.withValues(alpha: 0.4),
-                      size: 22,
-                    ),
-                    onPressed: () {
-                      navigator.pop();
-                    },
-                    tooltip: 'Close',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
                 ),
               ],
             ),
@@ -261,7 +223,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
     }
   }
 
-  Future<bool> _registerSubscriptionSilently(String userId) async {
+  Future<void> _registerSubscriptionSilently(String userId) async {
     final subscription = await subscribeUserToPush(AppConstants.vapidPublicKey);
     if (subscription != null) {
       try {
@@ -273,12 +235,10 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
           'auth': subscription['auth'],
         }, onConflict: 'endpoint');
         debugPrint('Push subscription verified and registered silently.');
-        return true;
       } catch (e) {
         debugPrint('Error registering subscription silently: $e');
       }
     }
-    return false;
   }
 
   void _showLoadingSnackBar(String message) {
@@ -328,8 +288,8 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
   Widget build(BuildContext context) {
     if (kIsWeb) {
       final user = ref.watch(authStateProvider);
-      if (user != null && _lastCheckedUserId != user.id) {
-        _lastCheckedUserId = user.id;
+      if (user != null && user.fullName.isNotEmpty && !_hasPrompted) {
+        _hasPrompted = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkPermissionsAndShowPrompt(user.id);
         });
