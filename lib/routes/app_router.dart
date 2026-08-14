@@ -12,6 +12,7 @@ import '../presentation/screens/rooms/room_join_screen.dart';
 import '../presentation/screens/rooms/subject_assignments_screen.dart';
 import '../presentation/screens/rooms/room_assignment_detail_screen.dart';
 import '../presentation/screens/rooms/resource_join_handler_screen.dart';
+import '../presentation/screens/rooms/study_resource_viewer_screen.dart';
 import '../presentation/screens/auth/splash_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
@@ -198,19 +199,31 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
-        path: '/join-resource',
+        path: '/rooms/:roomId/resources/:resourceId',
         pageBuilder: (context, state) {
-          final roomId = state.uri.queryParameters['roomId'] ?? '';
-          final resourceId = state.uri.queryParameters['resourceId'] ?? '';
+          final roomId = state.pathParameters['roomId'] ?? '';
+          final resourceId = state.pathParameters['resourceId'] ?? '';
           final code = state.uri.queryParameters['code'] ?? '';
           return _buildPageWithTransition(
             state: state,
-            child: ResourceJoinHandlerScreen(
+            child: StudyResourceViewerScreen(
               roomId: roomId,
               resourceId: resourceId,
               roomCode: code,
             ),
           );
+        },
+      ),
+      GoRoute(
+        path: '/join-resource',
+        redirect: (context, state) {
+          final roomId = state.uri.queryParameters['roomId'] ?? '';
+          final resourceId = state.uri.queryParameters['resourceId'] ?? '';
+          final code = state.uri.queryParameters['code'] ?? '';
+          if (roomId.isNotEmpty && resourceId.isNotEmpty) {
+            return '/rooms/$roomId/resources/$resourceId?code=$code';
+          }
+          return '/';
         },
       ),
     ],

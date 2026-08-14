@@ -5224,10 +5224,10 @@ class __RoomStudyResourcesTabState
       RoomStudyResource resource, String roomCode) async {
     final origin = kIsWeb ? Uri.base.origin : 'https://duetonight.web.app';
     final shareUrl =
-        '$origin/#/join-resource?roomId=${widget.roomId}&resourceId=${resource.id}&code=$roomCode';
+        '$origin/#/rooms/${widget.roomId}/resources/${resource.id}?code=$roomCode';
 
     await Share.share(
-      '📚 Study Resource: "${resource.title}" on DueTonight!\nJoin the room & preview: $shareUrl',
+      '📚 Study Resource: "${resource.title}" on DueTonight!\nJoin room & view resource: $shareUrl',
     );
 
     await Clipboard.setData(ClipboardData(text: shareUrl));
