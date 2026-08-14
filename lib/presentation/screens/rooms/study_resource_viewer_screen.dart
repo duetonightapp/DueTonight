@@ -154,6 +154,57 @@ class _StudyResourceViewerScreenState
     });
   }
 
+  Widget _buildPdfLogoBadge() {
+    Color badgeColor;
+    String badgeText;
+    IconData icon;
+
+    if (widget.resource.isPdf) {
+      badgeColor = const Color(0xFFEF4444);
+      badgeText = 'PDF';
+      icon = Icons.picture_as_pdf;
+    } else if (widget.resource.isPpt) {
+      badgeColor = const Color(0xFFF97316);
+      badgeText = 'PPT';
+      icon = Icons.slideshow;
+    } else {
+      badgeColor = const Color(0xFF3B82F6);
+      badgeText = 'DOC';
+      icon = Icons.description;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: badgeColor,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: badgeColor.withOpacity(0.4),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 12),
+          const SizedBox(width: 3),
+          Text(
+            badgeText,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -165,25 +216,33 @@ class _StudyResourceViewerScreenState
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        title: Row(
           children: [
-            Text(
-              widget.resource.title,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              '${widget.resource.fileExtension.toUpperCase()} • ${widget.resource.formattedSize} (Protected Internal Preview)',
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                color: Colors.white.withOpacity(0.5),
+            _buildPdfLogoBadge(),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.resource.title,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '${widget.resource.formattedSize} • Protected Internal Preview',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

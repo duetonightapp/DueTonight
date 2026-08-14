@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/room_provider.dart';
 import '../../providers/study_resource_provider.dart';
-import 'study_resource_viewer_screen.dart';
 
 class ResourceJoinHandlerScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -38,7 +37,6 @@ class _ResourceJoinHandlerScreenState
   Future<void> _processJoinAndRedirect() async {
     try {
       final roomRepo = ref.read(roomRepositoryProvider);
-      final resourceRepo = ref.read(studyResourceRepositoryProvider);
 
       // Auto-join the room by code if not already joined
       if (widget.roomCode.isNotEmpty) {
@@ -52,22 +50,10 @@ class _ResourceJoinHandlerScreenState
       ref.invalidate(myRoomsProvider);
       ref.invalidate(roomStudyResourcesProvider(widget.roomId));
 
-      final resource = await resourceRepo.getStudyResourceById(widget.resourceId);
-
       if (!mounted) return;
 
-      if (resource != null) {
-        // Directly navigate user to the Room's Study Resources Page
-        context.go('/rooms/${widget.roomId}?initialTab=2');
-        // Open the secure viewer overlay over the Study Resources page
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => StudyResourceViewerScreen(resource: resource),
-          ),
-        );
-      } else {
-        context.go('/rooms/${widget.roomId}?initialTab=2');
-      }
+      // Directly navigate user to the Room's Study Resources Page & pass resourceId to auto-open preview
+      context.go('/rooms/${widget.roomId}?initialTab=2&resourceId=${widget.resourceId}');
     } catch (e) {
       if (mounted) {
         setState(() {
