@@ -44,7 +44,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isSetupNameRoute = state.matchedLocation == '/setup-name';
 
       if (!isLoggedIn && !isAuthRoute && !isCallbackRoute && !isSplashRoute) {
-        return '/login';
+        final currentUri = state.uri.toString();
+        final redirectUri = Uri.encodeComponent(currentUri);
+        return '/login?redirect=$redirectUri';
       }
 
       if (isLoggedIn && needsName && !isSetupNameRoute && !isSplashRoute) {
@@ -54,6 +56,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isLoggedIn &&
           !needsName &&
           (isAuthRoute || isCallbackRoute || isSetupNameRoute)) {
+        final from = state.uri.queryParameters['redirect'];
+        if (from != null && from.isNotEmpty) {
+          final decoded = Uri.decodeComponent(from);
+          if (decoded.startsWith('/')) {
+            return decoded;
+          }
+        }
         return '/';
       }
 
@@ -97,10 +106,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/rooms/:roomId',
-        pageBuilder: (context, state) => _buildPageWithTransition(
-          state: state,
-          child: RoomDashboardScreen(roomId: state.pathParameters['roomId']!),
-        ),
+        pageBuilder: (context, state) {
+          final initialTabStr = state.uri.queryParameters['initialTab'];
+          final initialTab = int.tryParse(initialTabStr ?? '') ?? 0;
+          return _buildPageWithTransition(
+            state: state,
+            child: RoomDashboardScreen(
+              roomId: state.pathParameters['roomId']!,
+              initialTab: initialTab,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/rooms/:roomId/subjects/:subjectId',
@@ -175,7 +191,7 @@ CustomTransitionPage _buildPageWithTransition({
         opacity: animation,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0.0, 0.15), // Start slightly below (15% of screen height)
+            begin: const Offset(0.0, 0.15),
             end: Offset.zero,
           ).animate(
             CurvedAnimation(
