@@ -32,11 +32,13 @@ import 'study_resource_viewer_screen.dart';
 class RoomDashboardScreen extends ConsumerStatefulWidget {
   final String roomId;
   final int initialTab;
+  final String? autoOpenResourceId;
 
   const RoomDashboardScreen({
     super.key,
     required this.roomId,
     this.initialTab = 0,
+    this.autoOpenResourceId,
   });
 
   @override
@@ -52,6 +54,32 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     super.initState();
     _currentIndex = widget.initialTab;
     _pageController = PageController(initialPage: _currentIndex);
+
+    if (widget.autoOpenResourceId != null &&
+        widget.autoOpenResourceId!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndOpenAutoResource();
+      });
+    }
+  }
+
+  Future<void> _checkAndOpenAutoResource() async {
+    final resourceId = widget.autoOpenResourceId;
+    if (resourceId == null || resourceId.isEmpty) return;
+
+    try {
+      final repo = ref.read(studyResourceRepositoryProvider);
+      final resource = await repo.getStudyResourceById(resourceId);
+      if (resource != null && mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => StudyResourceViewerScreen(resource: resource),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error auto-opening resource: $e');
+    }
   }
 
   @override
@@ -329,13 +357,13 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
   Widget _buildBottomNavBar(BuildContext context) {
     return SafeArea(
       child: Container(
-        margin: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        height: 60,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        height: 62,
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Colors.white.withOpacity(0.06),
+            color: Colors.white.withOpacity(0.08),
           ),
           boxShadow: [
             BoxShadow(
@@ -349,19 +377,18 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavBarItem(0, Icons.home, Icons.home_outlined),
-            _buildNavBarItem(1, Icons.assignment, Icons.assignment_outlined),
-            _buildNavBarItem(2, Icons.menu_book, Icons.menu_book_outlined),
-            _buildNavBarItem(3, Icons.campaign, Icons.campaign_outlined),
+            _buildNavBarItem(0, Icons.home_rounded, 'Home'),
+            _buildNavBarItem(1, Icons.assignment_rounded, 'Tasks'),
+            _buildNavBarItem(2, Icons.menu_book_rounded, 'Resources'),
+            _buildNavBarItem(3, Icons.campaign_rounded, 'Updates'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavBarItem(int index, IconData activeIcon, IconData inactiveIcon) {
+  Widget _buildNavBarItem(int index, IconData iconData, String label) {
     final isActive = _currentIndex == index;
-    final color = isActive ? AppTheme.secondaryColor : Colors.white.withOpacity(0.5);
     return InkWell(
       onTap: () {
         _pageController.animateToPage(
@@ -370,29 +397,39 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           curve: Curves.easeInOut,
         );
       },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: isActive
             ? BoxDecoration(
-                color: AppTheme.secondaryColor.withOpacity(0.15),
+                color: AppTheme.primaryColor.withOpacity(0.25),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: AppTheme.secondaryColor.withOpacity(0.3),
+                  color: AppTheme.primaryColor.withOpacity(0.5),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.secondaryColor.withOpacity(0.1),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ],
               )
             : null,
-        child: Icon(
-          isActive ? activeIcon : inactiveIcon,
-          color: color,
-          size: 24,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              iconData,
+              color: isActive ? Colors.white : Colors.white.withOpacity(0.45),
+              size: 22,
+            ),
+            if (isActive) ...[
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -4887,53 +4924,25 @@ class __RoomStudyResourcesTabState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Study Resources',
-                              style: GoogleFonts.unbounded(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Moderator uploads & shared study materials',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: Colors.white.withOpacity(0.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (widget.canPost)
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => StudyResourceUploadSheet(
-                                  roomId: widget.roomId,
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text('Upload'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
+                        Text(
+                          'Study Resources',
+                          style: GoogleFonts.unbounded(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Moderator uploads & shared study materials',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -5033,19 +5042,9 @@ class __RoomStudyResourcesTabState
     required bool canDelete,
     required String roomCode,
   }) {
-    Color badgeColor;
-    IconData fileIcon;
-
-    if (resource.isPdf) {
-      badgeColor = const Color(0xFFEF4444);
-      fileIcon = Icons.picture_as_pdf;
-    } else if (resource.isPpt) {
-      badgeColor = const Color(0xFFF97316);
-      fileIcon = Icons.slideshow;
-    } else {
-      badgeColor = const Color(0xFF3B82F6);
-      fileIcon = Icons.description;
-    }
+    final badgeColor = resource.isPdf
+        ? const Color(0xFFEF4444)
+        : (resource.isPpt ? const Color(0xFFF97316) : const Color(0xFF3B82F6));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -5071,15 +5070,7 @@ class __RoomStudyResourcesTabState
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: badgeColor.withOpacity(0.3)),
-                  ),
-                  child: Icon(fileIcon, color: badgeColor, size: 28),
-                ),
+                _buildFileLogoBadge(resource),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -5273,6 +5264,58 @@ class __RoomStudyResourcesTabState
         );
       }
     }
+  }
+
+  Widget _buildFileLogoBadge(RoomStudyResource resource) {
+    Color badgeColor;
+    String text;
+    IconData icon;
+
+    if (resource.isPdf) {
+      badgeColor = const Color(0xFFEF4444);
+      text = 'PDF';
+      icon = Icons.picture_as_pdf;
+    } else if (resource.isPpt) {
+      badgeColor = const Color(0xFFF97316);
+      text = 'PPT';
+      icon = Icons.slideshow;
+    } else {
+      badgeColor = const Color(0xFF3B82F6);
+      text = 'DOC';
+      icon = Icons.description;
+    }
+
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: badgeColor,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: badgeColor.withOpacity(0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 1),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
