@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,33 +22,41 @@ class CloudinaryUploadService {
       : _client = client ?? Supabase.instance.client;
 
   Future<CloudinaryUploadResult> uploadFile({
-    required File file,
+    File? file,
+    Uint8List? fileBytes,
     required String roomId,
     required String fileName,
+    String folder = 'assignments',
     required void Function(double progress) onProgress,
   }) async {
-    // Clean file name to remove invalid characters
     final cleanFileName = fileName.replaceAll(RegExp(r'[^\w\.\-]'), '_');
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    // RLS policy checks split_part(name, '/', 2) to see if it is the room ID.
-    // So the second segment MUST be the room ID.
-    final path = 'rooms/$roomId/assignments/${timestamp}_$cleanFileName';
+    final path = 'rooms/$roomId/$folder/${timestamp}_$cleanFileName';
 
     onProgress(0.1);
 
-    await _client.storage.from('room-files').upload(
-      path,
-      file,
-      fileOptions: const FileOptions(upsert: true),
-    );
+    if (fileBytes != null) {
+      await _client.storage.from('room-files').uploadBinary(
+            path,
+            fileBytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+    } else if (file != null) {
+      await _client.storage.from('room-files').upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+    } else {
+      throw Exception('No file or file bytes provided for upload');
+    }
 
     onProgress(0.8);
 
-    // Create a pre-authenticated signed URL valid for 10 years (315360000 seconds)
     final signedUrl = await _client.storage.from('room-files').createSignedUrl(
-      path,
-      315360000,
-    );
+          path,
+          315360000,
+        );
 
     onProgress(1.0);
 
@@ -58,4 +67,3 @@ class CloudinaryUploadService {
     );
   }
 }
-
