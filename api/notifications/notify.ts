@@ -37,8 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { roomId, type, title, details, uploaderName } = req.body || {};
 
-  if (!roomId || !type || !title || !uploaderName) {
-    return res.status(400).json({ error: 'Missing required parameters (roomId, type, title, uploaderName)' });
+  if (!roomId || !type || !title || (type !== 'resource' && !uploaderName)) {
+    return res.status(400).json({ error: 'Missing required parameters (roomId, type, title)' });
   }
 
   try {
@@ -57,19 +57,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ status: 'No subscriptions found for room' });
     }
 
-    let notificationTitle = `${uploaderName} posted an update`;
+    let notificationTitle = uploaderName ? `${uploaderName} posted an update` : 'New Update';
     if (type === 'assignment') {
       notificationTitle = `New Assignment from ${uploaderName}`;
     } else if (type === 'announcement') {
       notificationTitle = `New Announcement from ${uploaderName}`;
     } else if (type === 'solution') {
       notificationTitle = `New Solution from ${uploaderName}`;
+    } else if (type === 'resource') {
+      notificationTitle = `New Resource Uploaded`;
+    }
+
+    let targetUrl = `/rooms/${roomId}`;
+    if (type === 'resource') {
+      targetUrl = `/rooms/${roomId}?initialTab=2`;
+    } else if (type === 'assignment') {
+      targetUrl = `/rooms/${roomId}?initialTab=1`;
+    } else if (type === 'announcement') {
+      targetUrl = `/rooms/${roomId}?initialTab=3`;
     }
 
     const payload = JSON.stringify({
       title: notificationTitle,
       body: `${title}${details ? ': ' + details : ''}`,
-      url: `/rooms/${roomId}`,
+      url: targetUrl,
     });
 
     const deleteIds: string[] = [];

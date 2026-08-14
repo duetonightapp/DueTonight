@@ -156,7 +156,7 @@ class _NotificationPromptWrapperState extends ConsumerState<NotificationPromptWr
                             ),
                           ),
                           TextSpan(
-                            text: ' if you don\'t allow notifications! You won\'t get instant alerts when classmates post new assignments, announcements, or solutions.',
+                            text: ' if you don\'t allow notifications! You won\'t get instant alerts when classmates post new assignments, announcements, solutions, or study resources.',
                           ),
                         ],
                       ),

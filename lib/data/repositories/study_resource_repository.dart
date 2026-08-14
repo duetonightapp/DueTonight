@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants/app_constants.dart';
 import '../models/room_study_resource_model.dart';
 
 class StudyResourceRepository {
@@ -104,7 +107,54 @@ class StudyResourceRepository {
         .select()
         .single();
 
-    return RoomStudyResource.fromJson(Map<String, dynamic>.from(response));
+    final resource = RoomStudyResource.fromJson(Map<String, dynamic>.from(response));
+
+    await _triggerNotification(
+      roomId: roomId,
+      title: title,
+      fileName: fileName,
+    );
+
+    return resource;
+  }
+
+  Future<void> _triggerNotification({
+    required String roomId,
+    required String title,
+    required String fileName,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      String url;
+      if (kIsWeb) {
+        final origin = Uri.base.origin;
+        if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
+          url = '${AppConstants.backendUrlWeb}/api/notifications/notify';
+        } else {
+          url = '$origin/api/notifications/notify';
+        }
+      } else {
+        url = '${AppConstants.backendUrl}/api/notifications/notify';
+      }
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'roomId': roomId,
+          'type': 'resource',
+          'title': title,
+          'details': fileName,
+          'uploaderName': '',
+          'uploaderId': userId,
+        }),
+      );
+      debugPrint('Push notification study resource response: ${response.statusCode} - ${response.body}');
+    } catch (e) {
+      debugPrint('Error triggering push notification: $e');
+    }
   }
 
   Future<void> deleteResource({

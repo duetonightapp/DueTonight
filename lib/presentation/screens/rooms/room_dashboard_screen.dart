@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:open_filex/open_filex.dart';
@@ -50,6 +51,8 @@ class RoomDashboardScreen extends ConsumerStatefulWidget {
 class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
   late int _currentIndex;
   late PageController _pageController;
+  String? _lastSeenResourceId;
+  bool _hasUnreadResource = false;
 
   @override
   void initState() {
@@ -57,8 +60,61 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     _currentIndex = widget.initialTab;
     _pageController = PageController(initialPage: _currentIndex);
 
+    _initSeenResources();
+
     if (widget.roomCodeQuery != null && widget.roomCodeQuery!.isNotEmpty) {
       _autoJoinRoom(widget.roomCodeQuery!);
+    }
+  }
+
+  Future<void> _initSeenResources() async {
+    try {
+      final box = await Hive.openBox<String>('seen_resources');
+      final savedId = box.get('last_seen_${widget.roomId}');
+      if (mounted) {
+        setState(() {
+          _lastSeenResourceId = savedId;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading seen resources from Hive: $e');
+    }
+  }
+
+  Future<void> _markResourceAsSeen(String latestResourceId) async {
+    try {
+      final box = await Hive.openBox<String>('seen_resources');
+      await box.put('last_seen_${widget.roomId}', latestResourceId);
+      _lastSeenResourceId = latestResourceId;
+    } catch (e) {
+      debugPrint('Error saving seen resource to Hive: $e');
+    }
+  }
+
+  void _onTabSelected(int index) {
+    if (index == 2) {
+      final resources = ref.read(roomStudyResourcesProvider(widget.roomId)).valueOrNull;
+      if (resources != null && resources.isNotEmpty) {
+        final latestId = resources.first.id;
+        _markResourceAsSeen(latestId);
+      }
+      if (_hasUnreadResource) {
+        setState(() {
+          _hasUnreadResource = false;
+        });
+      }
+    }
+    if (_currentIndex != index) {
+      setState(() {
+        _currentIndex = index;
+      });
+    }
+    if (_pageController.hasClients && _pageController.page?.round() != index) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
   }
 
@@ -106,6 +162,37 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     final role = ref.watch(currentRoomRoleProvider(widget.roomId));
     final canPost = role == 'owner' || role == 'moderator';
     final canDelete = role == 'owner' || role == 'moderator';
+
+    final studyResourcesAsync = ref.watch(roomStudyResourcesProvider(widget.roomId));
+    studyResourcesAsync.whenData((resources) {
+      if (resources.isNotEmpty) {
+        final latestId = resources.first.id;
+        if (_currentIndex == 2) {
+          if (_lastSeenResourceId != latestId) {
+            _markResourceAsSeen(latestId);
+          }
+          if (_hasUnreadResource) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _hasUnreadResource) {
+                setState(() {
+                  _hasUnreadResource = false;
+                });
+              }
+            });
+          }
+        } else {
+          if (_lastSeenResourceId != latestId && !_hasUnreadResource) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_hasUnreadResource) {
+                setState(() {
+                  _hasUnreadResource = true;
+                });
+              }
+            });
+          }
+        }
+      }
+    });
 
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 768;
@@ -197,13 +284,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                 if (!isMobile) ...[
                   NavigationRail(
                     selectedIndex: _currentIndex,
-                    onDestinationSelected: (index) {
-                      _pageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
+                    onDestinationSelected: (index) => _onTabSelected(index),
                     backgroundColor: AppTheme.surfaceColor,
                     extended: isDesktop,
                     labelType: isDesktop ? NavigationRailLabelType.none : NavigationRailLabelType.all,
@@ -211,23 +292,23 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                     selectedIconTheme: const IconThemeData(color: AppTheme.secondaryColor),
                     unselectedLabelTextStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
                     selectedLabelTextStyle: const TextStyle(color: AppTheme.secondaryColor, fontSize: 12, fontWeight: FontWeight.bold),
-                    destinations: const [
-                      NavigationRailDestination(
+                    destinations: [
+                      const NavigationRailDestination(
                         icon: Icon(Icons.home_outlined),
                         selectedIcon: Icon(Icons.home_rounded),
                         label: Text('Home'),
                       ),
-                      NavigationRailDestination(
+                      const NavigationRailDestination(
                         icon: Icon(Icons.assignment_outlined),
                         selectedIcon: Icon(Icons.assignment_rounded),
                         label: Text('Assignments'),
                       ),
                       NavigationRailDestination(
-                        icon: Icon(Icons.menu_book_outlined),
-                        selectedIcon: Icon(Icons.menu_book_rounded),
-                        label: Text('Study Resources'),
+                        icon: _buildBadgeIcon(Icons.menu_book_outlined, _hasUnreadResource),
+                        selectedIcon: _buildBadgeIcon(Icons.menu_book_rounded, _hasUnreadResource),
+                        label: const Text('Study Resources'),
                       ),
-                      NavigationRailDestination(
+                      const NavigationRailDestination(
                         icon: Icon(Icons.campaign_outlined),
                         selectedIcon: Icon(Icons.campaign_rounded),
                         label: Text('Announcements'),
@@ -239,22 +320,12 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                 Expanded(
                   child: PageView(
                     controller: _pageController,
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentIndex = index;
-                      });
-                    },
+                    onPageChanged: (index) => _onTabSelected(index),
                     children: [
                       ResponsiveContainer(
                         child: _RoomHomeTab(
                           roomId: widget.roomId,
-                          onSwitchTab: (index) {
-                            _pageController.animateToPage(
-                              index,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                            );
-                          },
+                          onSwitchTab: (index) => _onTabSelected(index),
                         ),
                       ),
                       ResponsiveContainer(
@@ -272,13 +343,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                       ResponsiveContainer(
                         child: _RoomAnnouncementsTab(
                           roomId: widget.roomId,
-                          onSwitchTab: (index) {
-                            _pageController.animateToPage(
-                              index,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                            );
-                          },
+                          onSwitchTab: (index) => _onTabSelected(index),
                         ),
                       ),
                     ],
@@ -392,7 +457,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           children: [
             _buildNavBarItem(0, Icons.home_rounded, 'Home'),
             _buildNavBarItem(1, Icons.assignment_rounded, 'Tasks'),
-            _buildNavBarItem(2, Icons.menu_book_rounded, 'Resources'),
+            _buildNavBarItem(2, Icons.menu_book_rounded, 'Resources', hasBadge: _hasUnreadResource),
             _buildNavBarItem(3, Icons.campaign_rounded, 'Updates'),
           ],
         ),
@@ -400,16 +465,10 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     );
   }
 
-  Widget _buildNavBarItem(int index, IconData iconData, String label) {
+  Widget _buildNavBarItem(int index, IconData iconData, String label, {bool hasBadge = false}) {
     final isActive = _currentIndex == index;
     return InkWell(
-      onTap: () {
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      },
+      onTap: () => _onTabSelected(index),
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -426,8 +485,9 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            _buildBadgeIcon(
               iconData,
+              hasBadge,
               color: isActive ? Colors.white : Colors.white.withOpacity(0.45),
               size: 22,
             ),
@@ -445,6 +505,35 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBadgeIcon(IconData iconData, bool hasBadge, {Color? color, double size = 22}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(iconData, color: color, size: size),
+        if (hasBadge)
+          Positioned(
+            top: -2,
+            right: -2,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: AppTheme.errorColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.errorColor,
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
