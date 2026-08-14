@@ -83,6 +83,26 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant RoomDashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != oldWidget.initialTab) {
+      setState(() {
+        _currentIndex = widget.initialTab;
+      });
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(widget.initialTab);
+      }
+    }
+    if (widget.autoOpenResourceId != null &&
+        widget.autoOpenResourceId!.isNotEmpty &&
+        widget.autoOpenResourceId != oldWidget.autoOpenResourceId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndOpenAutoResource();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();

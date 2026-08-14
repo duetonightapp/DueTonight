@@ -11,6 +11,7 @@ import '../presentation/screens/rooms/room_entry_screen.dart';
 import '../presentation/screens/rooms/room_join_screen.dart';
 import '../presentation/screens/rooms/subject_assignments_screen.dart';
 import '../presentation/screens/rooms/room_assignment_detail_screen.dart';
+import '../presentation/screens/rooms/resource_join_handler_screen.dart';
 import '../presentation/screens/auth/splash_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
@@ -195,6 +196,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           state: state,
           child: const Scaffold(body: Center(child: CircularProgressIndicator())),
         ),
+      ),
+      GoRoute(
+        path: '/join-resource',
+        pageBuilder: (context, state) {
+          final roomId = state.uri.queryParameters['roomId'] ?? '';
+          final resourceId = state.uri.queryParameters['resourceId'] ?? '';
+          final code = state.uri.queryParameters['code'] ?? '';
+          return _buildPageWithTransition(
+            state: state,
+            child: ResourceJoinHandlerScreen(
+              roomId: roomId,
+              resourceId: resourceId,
+              roomCode: code,
+            ),
+          );
+        },
       ),
     ],
   );
