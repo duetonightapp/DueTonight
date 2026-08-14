@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../routes/app_router.dart';
 import '../../providers/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -35,7 +36,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     );
 
     _controller.forward();
-    _navigateToNext();
+    _completeSplash();
   }
 
   @override
@@ -44,29 +45,36 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     super.dispose();
   }
 
-  Future<void> _navigateToNext() async {
+  Future<void> _completeSplash() async {
     // Wait for the animation to play out
     await Future.delayed(const Duration(milliseconds: 1800));
     if (!mounted) return;
 
+    // Ensure auth state is loaded before marking splash as done
     final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) {
-      context.go('/login');
-    } else {
+    if (session != null) {
       final authState = ref.read(authStateProvider);
-      if (authState != null) {
-        final needsName = authState.fullName.trim().isEmpty;
-        context.go(needsName ? '/setup-name' : '/');
-      } else {
-        // Wait for authStateProvider to load if it hasn't already
+      if (authState == null) {
+        // Wait for authStateProvider to load
+        final completer = Completer<void>();
         ref.listenManual(authStateProvider, (previous, next) {
-          if (next != null && mounted) {
-            final needsName = next.fullName.trim().isEmpty;
-            context.go(needsName ? '/setup-name' : '/');
+          if (next != null && !completer.isCompleted) {
+            completer.complete();
           }
         });
+        // Time-box the wait to 3 seconds max
+        await completer.future.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {},
+        );
       }
     }
+
+    if (!mounted) return;
+
+    // Signal that splash is done — GoRouter redirect will handle navigation,
+    // including restoring any pending deep link target.
+    ref.read(splashCompleteProvider.notifier).state = true;
   }
 
   @override
