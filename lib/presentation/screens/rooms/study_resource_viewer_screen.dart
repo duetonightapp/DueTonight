@@ -26,6 +26,7 @@ class _StudyResourceViewerScreenState
     extends State<StudyResourceViewerScreen> {
   Uint8List? _pdfBytes;
   bool _isLoading = true;
+  bool _useBlobIframe = false;
   String? _errorMessage;
   late String _viewTypeId;
 
@@ -59,7 +60,7 @@ class _StudyResourceViewerScreenState
       final client = Supabase.instance.client;
       final storagePath = _extractStoragePath(widget.resource.fileUrl);
 
-      // Strategy 1: Supabase client authenticated download (solves private bucket RLS & CORS)
+      // Strategy 1: Supabase client authenticated download
       if (storagePath.isNotEmpty) {
         try {
           final bytes = await client.storage
@@ -77,7 +78,7 @@ class _StudyResourceViewerScreenState
         }
       }
 
-      // Strategy 2: Generate fresh signed URL & fetch
+      // Strategy 2: Fresh signed URL fetch
       if (storagePath.isNotEmpty) {
         try {
           final freshSignedUrl = await client.storage
@@ -120,6 +121,23 @@ class _StudyResourceViewerScreenState
           _errorMessage = 'Failed to load PDF document: $e';
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  void _switchToBlobIframe() {
+    if (kIsWeb && _pdfBytes != null) {
+      try {
+        final blobUrl = createBlobUrl(_pdfBytes!, 'application/pdf');
+        registerIframeViewFactory(_viewTypeId, blobUrl);
+        if (mounted) {
+          setState(() {
+            _useBlobIframe = true;
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Blob URL creation error: $e');
       }
     }
   }
@@ -216,6 +234,7 @@ class _StudyResourceViewerScreenState
                   setState(() {
                     _isLoading = true;
                     _errorMessage = null;
+                    _useBlobIframe = false;
                   });
                   if (widget.resource.isPdf) {
                     _loadPdf();
@@ -236,13 +255,19 @@ class _StudyResourceViewerScreenState
     }
 
     if (widget.resource.isPdf && _pdfBytes != null) {
+      if (_useBlobIframe && kIsWeb) {
+        return HtmlElementView(viewType: _viewTypeId);
+      }
+
       return SfPdfViewer.memory(
         _pdfBytes!,
         canShowScrollHead: true,
         canShowScrollStatus: true,
         onDocumentLoadFailed: (details) {
           debugPrint('SfPdfViewer load failed: ${details.description}');
-          if (mounted) {
+          if (kIsWeb) {
+            _switchToBlobIframe();
+          } else if (mounted) {
             setState(() {
               _errorMessage =
                   'PDF render error: ${details.description} (${details.error})';
