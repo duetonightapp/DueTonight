@@ -29,20 +29,26 @@ import 'study_resource_viewer_screen.dart';
 
 class RoomDashboardScreen extends ConsumerStatefulWidget {
   final String roomId;
+  final int initialTab;
 
-  const RoomDashboardScreen({super.key, required this.roomId});
+  const RoomDashboardScreen({
+    super.key,
+    required this.roomId,
+    this.initialTab = 0,
+  });
 
   @override
   ConsumerState<RoomDashboardScreen> createState() => _RoomDashboardScreenState();
 }
 
 class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex;
   late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialTab;
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -288,7 +294,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
 
   Widget _buildNavBarItem(int index, IconData activeIcon, IconData inactiveIcon) {
     final isActive = _currentIndex == index;
-    final color = isActive ? AppTheme.secondaryColor : Colors.white.withOpacity(0.4);
+    final color = isActive ? AppTheme.secondaryColor : Colors.white.withOpacity(0.5);
     return InkWell(
       onTap: () {
         _pageController.animateToPage(
@@ -299,13 +305,18 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: isActive
             ? BoxDecoration(
+                color: AppTheme.secondaryColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppTheme.secondaryColor.withOpacity(0.3),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.secondaryColor.withOpacity(0.08),
-                    blurRadius: 10,
+                    color: AppTheme.secondaryColor.withOpacity(0.1),
+                    blurRadius: 8,
                     spreadRadius: 1,
                   ),
                 ],
@@ -4783,13 +4794,13 @@ class __RoomStudyResourcesTabState
 
     if (resource.isPdf) {
       badgeColor = const Color(0xFFEF4444);
-      fileIcon = Icons.picture_as_pdf_rounded;
+      fileIcon = Icons.picture_as_pdf;
     } else if (resource.isPpt) {
       badgeColor = const Color(0xFFF97316);
-      fileIcon = Icons.slideshow_rounded;
+      fileIcon = Icons.slideshow;
     } else {
       badgeColor = const Color(0xFF3B82F6);
-      fileIcon = Icons.description_rounded;
+      fileIcon = Icons.description;
     }
 
     return Container(
@@ -4819,8 +4830,9 @@ class __RoomStudyResourcesTabState
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: badgeColor.withOpacity(0.12),
+                    color: badgeColor.withOpacity(0.16),
                     borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: badgeColor.withOpacity(0.3)),
                   ),
                   child: Icon(fileIcon, color: badgeColor, size: 28),
                 ),
@@ -4870,13 +4882,22 @@ class __RoomStudyResourcesTabState
                   ),
                 ),
                 if (canDelete)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: AppTheme.errorColor,
-                      size: 20,
+                  Container(
+                    margin: const EdgeInsets.only(left: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.errorColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    onPressed: () => _confirmDelete(resource),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: AppTheme.errorColor,
+                        size: 20,
+                      ),
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      padding: EdgeInsets.zero,
+                      onPressed: () => _confirmDelete(resource),
+                    ),
                   ),
               ],
             ),

@@ -57,18 +57,16 @@ class _ResourceJoinHandlerScreenState
       if (!mounted) return;
 
       if (resource != null) {
-        // Direct redirect to internal resource viewer
-        Navigator.of(context).pushReplacement(
+        // Directly navigate user to the Room's Study Resources Page
+        context.go('/rooms/${widget.roomId}?initialTab=2');
+        // Open the secure viewer overlay over the Study Resources page
+        Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => StudyResourceViewerScreen(resource: resource),
           ),
         );
       } else {
-        setState(() {
-          _errorMessage =
-              'Study resource not found or no longer available.';
-          _isLoading = false;
-        });
+        context.go('/rooms/${widget.roomId}?initialTab=2');
       }
     } catch (e) {
       if (mounted) {
@@ -94,7 +92,7 @@ class _ResourceJoinHandlerScreenState
                     CircularProgressIndicator(color: AppTheme.primaryColor),
                     const SizedBox(height: 20),
                     Text(
-                      'Joining room & loading study resource...',
+                      'Joining room & opening study resources...',
                       style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 15,
@@ -108,7 +106,7 @@ class _ResourceJoinHandlerScreenState
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.error_outline_rounded,
+                      Icons.error_outline,
                       color: AppTheme.errorColor,
                       size: 52,
                     ),
@@ -123,14 +121,14 @@ class _ResourceJoinHandlerScreenState
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: () => context.go('/'),
+                      onPressed: () => context.go('/rooms/${widget.roomId}?initialTab=2'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryColor,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text('Go to Home'),
+                      child: const Text('Go to Study Resources'),
                     ),
                   ],
                 ),
