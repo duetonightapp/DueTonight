@@ -33,12 +33,14 @@ class RoomDashboardScreen extends ConsumerStatefulWidget {
   final String roomId;
   final int initialTab;
   final String? autoOpenResourceId;
+  final String? roomCodeQuery;
 
   const RoomDashboardScreen({
     super.key,
     required this.roomId,
     this.initialTab = 0,
     this.autoOpenResourceId,
+    this.roomCodeQuery,
   });
 
   @override
@@ -55,30 +57,22 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
     _currentIndex = widget.initialTab;
     _pageController = PageController(initialPage: _currentIndex);
 
-    if (widget.autoOpenResourceId != null &&
-        widget.autoOpenResourceId!.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _checkAndOpenAutoResource();
-      });
+    if (widget.roomCodeQuery != null && widget.roomCodeQuery!.isNotEmpty) {
+      _autoJoinRoom(widget.roomCodeQuery!);
     }
   }
 
-  Future<void> _checkAndOpenAutoResource() async {
-    final resourceId = widget.autoOpenResourceId;
-    if (resourceId == null || resourceId.isEmpty) return;
-
+  Future<void> _autoJoinRoom(String code) async {
     try {
-      final repo = ref.read(studyResourceRepositoryProvider);
-      final resource = await repo.getStudyResourceById(resourceId);
-      if (resource != null && mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => StudyResourceViewerScreen(resource: resource),
-          ),
-        );
+      final roomRepo = ref.read(roomRepositoryProvider);
+      await roomRepo.joinRoomByCode(code);
+      if (mounted) {
+        ref.invalidate(myRoomsProvider);
+        ref.invalidate(roomDetailsProvider(widget.roomId));
+        ref.invalidate(roomStudyResourcesProvider(widget.roomId));
       }
-    } catch (e) {
-      debugPrint('Error auto-opening resource: $e');
+    } catch (_) {
+      // Ignored if user already in room
     }
   }
 
@@ -93,12 +87,10 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
         _pageController.jumpToPage(widget.initialTab);
       }
     }
-    if (widget.autoOpenResourceId != null &&
-        widget.autoOpenResourceId!.isNotEmpty &&
-        widget.autoOpenResourceId != oldWidget.autoOpenResourceId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _checkAndOpenAutoResource();
-      });
+    if (widget.roomCodeQuery != null &&
+        widget.roomCodeQuery!.isNotEmpty &&
+        widget.roomCodeQuery != oldWidget.roomCodeQuery) {
+      _autoJoinRoom(widget.roomCodeQuery!);
     }
   }
 
@@ -274,6 +266,7 @@ class _RoomDashboardScreenState extends ConsumerState<RoomDashboardScreen> {
                           canPost: canPost,
                           canDelete: canDelete,
                           roomCode: room.roomCode,
+                          highlightResourceId: widget.autoOpenResourceId,
                         ),
                       ),
                       ResponsiveContainer(
@@ -4908,12 +4901,14 @@ class _RoomStudyResourcesTab extends ConsumerStatefulWidget {
   final bool canPost;
   final bool canDelete;
   final String roomCode;
+  final String? highlightResourceId;
 
   const _RoomStudyResourcesTab({
     required this.roomId,
     required this.canPost,
     required this.canDelete,
     required this.roomCode,
+    this.highlightResourceId,
   });
 
   @override
@@ -5062,6 +5057,9 @@ class __RoomStudyResourcesTabState
     required bool canDelete,
     required String roomCode,
   }) {
+    final isHighlighted = widget.highlightResourceId != null &&
+        widget.highlightResourceId == resource.id;
+
     final badgeColor = resource.isPdf
         ? const Color(0xFFEF4444)
         : (resource.isPpt ? const Color(0xFFF97316) : const Color(0xFF3B82F6));
@@ -5072,12 +5070,18 @@ class __RoomStudyResourcesTabState
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withOpacity(0.06),
+          color: isHighlighted
+              ? AppTheme.primaryColor
+              : Colors.white.withOpacity(0.06),
+          width: isHighlighted ? 2.0 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
+            color: isHighlighted
+                ? AppTheme.primaryColor.withOpacity(0.35)
+                : Colors.black.withOpacity(0.2),
+            blurRadius: isHighlighted ? 16 : 10,
+            spreadRadius: isHighlighted ? 1 : 0,
             offset: const Offset(0, 4),
           ),
         ],
@@ -5087,6 +5091,33 @@ class __RoomStudyResourcesTabState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isHighlighted) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.primaryColor.withOpacity(0.5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 14, color: AppTheme.primaryColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      'SHARED RESOURCE',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
