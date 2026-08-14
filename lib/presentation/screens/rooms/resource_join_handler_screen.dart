@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme/app_theme.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../providers/room_provider.dart';
 import '../../providers/study_resource_provider.dart';
 import 'study_resource_viewer_screen.dart';
@@ -91,7 +91,7 @@ class _ResourceJoinHandlerScreenState
               ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircularProgressIndicator(color: AppTheme.primaryColor),
+                    CircularProgressIndicator(color: AppTheme.primaryColor),
                     const SizedBox(height: 20),
                     Text(
                       'Joining room & loading study resource...',
@@ -107,7 +107,7 @@ class _ResourceJoinHandlerScreenState
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline_rounded,
                       color: AppTheme.errorColor,
                       size: 52,
