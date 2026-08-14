@@ -110,6 +110,7 @@ class SubjectAssignmentsScreen extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     return RoomAssignmentCard(
                       assignment: sortedAssignments[index],
+                      showPriority: false,
                     );
                   },
                 );
