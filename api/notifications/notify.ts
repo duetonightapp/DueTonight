@@ -59,10 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let recipientSubscriptions = subscriptions;
     if (uploaderId && Array.isArray(subscriptions)) {
-      const filtered = subscriptions.filter((sub: any) => sub.user_id && sub.user_id !== uploaderId);
-      if (filtered.length > 0) {
-        recipientSubscriptions = filtered;
-      }
+      recipientSubscriptions = subscriptions.filter((sub: any) => sub.user_id && sub.user_id !== uploaderId);
     }
 
     let notificationTitle = uploaderName ? `${uploaderName} posted an update` : 'New Update';
@@ -117,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       status: 'Notifications sent successfully',
-      deliveredCount: subscriptions.length - deleteIds.length,
+      deliveredCount: recipientSubscriptions.length - deleteIds.length,
     });
   } catch (err: any) {
     console.error('Error in notify handler:', err);
