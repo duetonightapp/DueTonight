@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../providers/room_provider.dart';
 
 class RoomCreateScreen extends ConsumerStatefulWidget {
@@ -19,8 +20,8 @@ class _RoomCreateScreenState extends ConsumerState<RoomCreateScreen> {
   final _divisionController = TextEditingController();
   final _subjectController = TextEditingController();
   final List<String> _subjects = [];
-  String? _subjectError;
   bool _isLoading = false;
+  String? _subjectError;
 
   @override
   void dispose() {
@@ -33,21 +34,24 @@ class _RoomCreateScreenState extends ConsumerState<RoomCreateScreen> {
   }
 
   void _addSubject() {
-    final raw = _subjectController.text.trim();
-    if (raw.isEmpty) return;
-
-    final exists = _subjects.any((s) => s.toLowerCase() == raw.toLowerCase());
-    if (exists) {
+    final text = _subjectController.text.trim();
+    if (text.isEmpty) return;
+    if (_subjects.any((s) => s.toLowerCase() == text.toLowerCase())) {
       setState(() {
         _subjectError = 'Subject already added.';
       });
       return;
     }
-
     setState(() {
-      _subjects.add(raw);
+      _subjects.add(text);
       _subjectController.clear();
       _subjectError = null;
+    });
+  }
+
+  void _removeSubject(int index) {
+    setState(() {
+      _subjects.removeAt(index);
     });
   }
 
@@ -55,6 +59,7 @@ class _RoomCreateScreenState extends ConsumerState<RoomCreateScreen> {
     if (_isLoading) return;
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
+
     if (_subjects.isEmpty) {
       setState(() {
         _subjectError = 'Add at least one subject.';
@@ -77,6 +82,10 @@ class _RoomCreateScreenState extends ConsumerState<RoomCreateScreen> {
       String roomId = result.roomId;
       if (result.existed) {
         roomId = await repo.joinRoomByCode(result.roomCode);
+        AnalyticsService().trackRoomJoined(
+          roomId: roomId,
+          roomCode: result.roomCode,
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -84,6 +93,12 @@ class _RoomCreateScreenState extends ConsumerState<RoomCreateScreen> {
             ),
           );
         }
+      } else {
+        AnalyticsService().trackRoomCreated(
+          roomId: roomId,
+          roomName: '${_collegeController.text.trim()} - ${_branchController.text.trim()}',
+          roomCode: result.roomCode,
+        );
       }
 
       if (mounted) {

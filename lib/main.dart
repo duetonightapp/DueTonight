@@ -9,6 +9,7 @@ import 'routes/app_router.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'core/utils/url_strategy_helper.dart';
 import 'presentation/widgets/notification_prompt_wrapper.dart';
+import 'core/services/analytics_service.dart';
 
 void main() async {
   configureUrlStrategy();
@@ -16,13 +17,7 @@ void main() async {
   await Hive.initFlutter();
   await Hive.openBox<String>('auth_redirect');
   
-  if (AppConstants.posthogApiKey.startsWith('phc_') &&
-      !AppConstants.posthogApiKey.contains('YOUR_')) {
-    final postHogConfig = PostHogConfig(AppConstants.posthogApiKey)
-      ..host = AppConstants.posthogHost
-      ..sessionReplay = true;
-    await Posthog().setup(postHogConfig);
-  }
+  await AnalyticsService().init();
 
   final hasValidConfig = AppConstants.supabaseUrl.startsWith('https://') &&
                          !AppConstants.supabaseUrl.contains('YOUR_');
@@ -70,7 +65,7 @@ class _DueTonightAppState extends ConsumerState<DueTonightApp> {
         final user = ref.read(authStateProvider);
         debugPrint('Current auth state user: ${user?.email}');
         
-        Posthog().identify(
+        AnalyticsService().identify(
           userId: session.user.id,
           userProperties: {
             'email': session.user.email ?? '',
@@ -78,7 +73,7 @@ class _DueTonightAppState extends ConsumerState<DueTonightApp> {
           },
         );
       } else if (event.event == AuthChangeEvent.signedOut) {
-        Posthog().reset();
+        AnalyticsService().reset();
       }
     });
   }

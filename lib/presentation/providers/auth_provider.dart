@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/user.dart' as app;
+import '../../core/services/analytics_service.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -46,25 +47,49 @@ class AuthNotifier extends StateNotifier<app.User?> {
 
       if (response != null) {
         debugPrint('Profile found: $response');
-        state = app.User.fromJson(response);
+        final user = app.User.fromJson(response);
+        state = user;
+        AnalyticsService().identify(
+          userId: userId,
+          userProperties: {
+            'email': user.email,
+            'name': user.fullName,
+          },
+        );
       } else {
         debugPrint('No profile found, creating from auth user');
         final authUser = _client.auth.currentUser;
-        state = app.User(
+        final user = app.User(
           id: userId,
           email: authUser?.email ?? '',
           fullName: '',
           avatarUrl: authUser?.userMetadata?['avatar_url'] as String?,
         );
+        state = user;
+        AnalyticsService().identify(
+          userId: userId,
+          userProperties: {
+            'email': user.email,
+            'name': user.fullName,
+          },
+        );
       }
     } catch (e) {
       debugPrint('Error fetching profile: $e');
       final authUser = _client.auth.currentUser;
-      state = app.User(
+      final user = app.User(
         id: userId,
         email: authUser?.email ?? '',
         fullName: '',
         avatarUrl: authUser?.userMetadata?['avatar_url'] as String?,
+      );
+      state = user;
+      AnalyticsService().identify(
+        userId: userId,
+        userProperties: {
+          'email': user.email,
+          'name': user.fullName,
+        },
       );
     }
   }
@@ -72,6 +97,7 @@ class AuthNotifier extends StateNotifier<app.User?> {
   Future<void> signInWithGoogle() async {
     try {
       debugPrint('Starting Google Sign In');
+      AnalyticsService().capture('login_attempt', properties: {'method': 'google'});
 
       final redirectUrl = kIsWeb
           ? '${Uri.base.origin}/login-callback'
@@ -93,10 +119,19 @@ class AuthNotifier extends StateNotifier<app.User?> {
   Future<void> signInWithEmailAndPassword(String email, String password) async {
     try {
       debugPrint('Starting Email Sign In');
+      AnalyticsService().capture('login_attempt', properties: {'method': 'email'});
       await _client.auth.signInWithPassword(
         email: email.trim(),
         password: password,
       );
+      final currentUserId = _client.auth.currentUser?.id;
+      if (currentUserId != null) {
+        AnalyticsService().trackUserSignedIn(
+          method: 'email',
+          userId: currentUserId,
+          email: email.trim(),
+        );
+      }
       debugPrint('Email Sign In completed');
     } catch (e) {
       debugPrint('Email Sign in error: $e');
@@ -107,10 +142,18 @@ class AuthNotifier extends StateNotifier<app.User?> {
   Future<AuthResponse> signUpWithEmailAndPassword(String email, String password) async {
     try {
       debugPrint('Starting Email Sign Up');
+      AnalyticsService().capture('signup_attempt', properties: {'method': 'email'});
       final response = await _client.auth.signUp(
         email: email.trim(),
         password: password,
       );
+      if (response.user != null) {
+        AnalyticsService().trackUserSignedUp(
+          method: 'email',
+          userId: response.user!.id,
+          email: email.trim(),
+        );
+      }
       debugPrint('Email Sign Up completed');
       return response;
     } catch (e) {
@@ -119,9 +162,9 @@ class AuthNotifier extends StateNotifier<app.User?> {
     }
   }
 
-
   Future<void> signOut() async {
     await _client.auth.signOut();
+    await AnalyticsService().trackUserSignedOut();
     state = null;
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../providers/room_provider.dart';
 
 class RoomJoinScreen extends ConsumerStatefulWidget {
@@ -42,7 +43,12 @@ class _RoomJoinScreenState extends ConsumerState<RoomJoinScreen> {
     final repo = ref.read(roomRepositoryProvider);
 
     try {
-      final roomId = await repo.joinRoomByCode(_codeController.text.trim());
+      final code = _codeController.text.trim();
+      final roomId = await repo.joinRoomByCode(code);
+      AnalyticsService().trackRoomJoined(
+        roomId: roomId,
+        roomCode: code,
+      );
       if (mounted) {
         ref.invalidate(myRoomsProvider);
         context.go('/rooms/$roomId');
