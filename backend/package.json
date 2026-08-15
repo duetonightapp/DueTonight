@@ -3,19 +3,27 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "tsc || echo 'No build step needed'",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@prisma/client": "^5.14.0",
     "@supabase/supabase-js": "^2.43.4",
+    "axios": "^1.7.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "pg": "^8.11.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
     "@types/node": "^20.12.12",
     "@types/pg": "^8.11.6",
     "@types/web-push": "^3.6.4",
     "@vercel/node": "^3.1.0",
+    "prisma": "^5.14.0",
     "typescript": "^5.4.5"
   }
 }
