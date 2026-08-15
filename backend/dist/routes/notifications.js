@@ -46,14 +46,7 @@ router.post('/notify', async (req, res) => {
             return res.status(200).json({ status: 'No subscriptions found for room' });
         }
 
-        // Filter out the uploader if other room members exist
-        let recipientSubscriptions = subscriptions;
-        if (uploaderId && Array.isArray(subscriptions)) {
-            const filtered = subscriptions.filter((sub) => sub.user_id && sub.user_id !== uploaderId);
-            if (filtered.length > 0) {
-                recipientSubscriptions = filtered;
-            }
-        }
+        const recipientSubscriptions = subscriptions;
 
         let notificationTitle = `${uploaderName} uploaded a new ${type}`;
         if (type === 'assignment') {

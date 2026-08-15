@@ -110,34 +110,39 @@ class AssignmentSolutionRepository {
       debugPrint('Error fetching assignment details: $e');
     }
 
-    try {
-      String url;
-      if (kIsWeb) {
-        final origin = Uri.base.origin;
-        if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
-          url = '${AppConstants.backendUrlWeb}/api/notifications/notify';
-        } else {
-          url = '$origin/api/notifications/notify';
-        }
-      } else {
-        url = '${AppConstants.backendUrl}/api/notifications/notify';
+    final endpoints = <String>[];
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      if (!origin.contains('localhost') && !origin.contains('127.0.0.1')) {
+        endpoints.add('$origin/api/notifications/notify');
       }
+    }
+    endpoints.add('${AppConstants.backendUrlWeb}/api/notifications/notify');
+    endpoints.add('${AppConstants.backendUrl}/api/notifications/notify');
 
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'roomId': roomId,
-          'type': 'solution',
-          'title': 'solution for $assignmentTitle',
-          'details': fileName,
-          'uploaderName': uploaderName,
-          'uploaderId': userId,
-        }),
-      );
-      debugPrint('Push notification solution response: ${response.statusCode} - ${response.body}');
-    } catch (e) {
-      debugPrint('Error triggering push notification: $e');
+    final payload = jsonEncode({
+      'roomId': roomId,
+      'type': 'solution',
+      'title': 'solution for $assignmentTitle',
+      'details': fileName,
+      'uploaderName': uploaderName,
+      'uploaderId': userId,
+    });
+
+    for (final url in endpoints.toSet()) {
+      try {
+        final response = await http.post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: payload,
+        ).timeout(const Duration(seconds: 8));
+        debugPrint('Push notification solution response from $url: ${response.statusCode} - ${response.body}');
+        if (response.statusCode == 200) {
+          break;
+        }
+      } catch (e) {
+        debugPrint('Error triggering push notification at $url: $e');
+      }
     }
   }
 }

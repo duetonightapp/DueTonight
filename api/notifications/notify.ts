@@ -57,13 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ status: 'No subscriptions found for room' });
     }
 
-    let recipientSubscriptions = subscriptions;
-    if (uploaderId && Array.isArray(subscriptions)) {
-      const filtered = subscriptions.filter((sub: any) => sub.user_id && sub.user_id !== uploaderId);
-      if (filtered.length > 0) {
-        recipientSubscriptions = filtered;
-      }
-    }
+    const recipientSubscriptions = subscriptions;
 
     let notificationTitle = uploaderName ? `${uploaderName} posted an update` : 'New Update';
     if (type === 'assignment') {
