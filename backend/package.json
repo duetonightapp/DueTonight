@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "npx prisma generate && tsc || echo 'Build complete'",
+    "postinstall": "npx prisma generate",
+    "build": "npx prisma generate && tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -14,6 +15,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "pg": "^8.11.5",
+    "prisma": "^5.14.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -23,7 +25,6 @@
     "@types/pg": "^8.11.6",
     "@types/web-push": "^3.6.4",
     "@vercel/node": "^3.1.0",
-    "prisma": "^5.14.0",
     "typescript": "^5.4.5"
   }
 }
