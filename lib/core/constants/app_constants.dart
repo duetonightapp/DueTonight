@@ -6,8 +6,7 @@ class AppConstants {
       '63754572308-pn8uoavsl9sd50g76saqi3n6qtr3cdei.apps.googleusercontent.com';
   // For Android emulator, use http://10.0.2.2:3000
   // For web (local dev), update to http://localhost:3000
-  // For production, set to the actual deployed backend URL (e.g. https://api.duetonight.app)
-  static const String backendUrl = 'http://10.0.2.2:3000';
+  static const String backendUrl = 'https://duetonight-backend.onrender.com';
   static const String backendUrlWeb = 'https://duetonight-backend.onrender.com';
   static const String cloudinaryCloudName = 'dbzl3odk6';
   static const String cloudinaryUploadPreset = 'duetonight_uploads';

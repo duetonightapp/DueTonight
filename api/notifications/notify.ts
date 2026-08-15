@@ -59,7 +59,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let recipientSubscriptions = subscriptions;
     if (uploaderId && Array.isArray(subscriptions)) {
-      recipientSubscriptions = subscriptions.filter((sub: any) => sub.user_id && sub.user_id !== uploaderId);
+      const filtered = subscriptions.filter((sub: any) => sub.user_id && sub.user_id !== uploaderId);
+      if (filtered.length > 0) {
+        recipientSubscriptions = filtered;
+      }
     }
 
     let notificationTitle = uploaderName ? `${uploaderName} posted an update` : 'New Update';
