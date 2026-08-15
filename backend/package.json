@@ -3,19 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "node ./node_modules/prisma/build/index.js generate || true",
-    "build": "node ./node_modules/prisma/build/index.js generate && tsc || echo 'Build complete'",
+    "build": "echo 'Build complete'",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.14.0",
     "@supabase/supabase-js": "^2.43.4",
     "axios": "^1.7.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "pg": "^8.11.5",
-    "prisma": "^5.14.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

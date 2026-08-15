@@ -4,19 +4,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const db_service_1 = require("../services/db.service");
 const web_push_1 = __importDefault(require("web-push"));
+const supabase_js_1 = require("@supabase/supabase-js");
 const dotenv_1 = __importDefault(require("dotenv"));
+
 dotenv_1.default.config();
+
 const router = (0, express_1.Router)();
-const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
-if (vapidPublicKey && vapidPrivateKey) {
-    web_push_1.default.setVapidDetails('mailto:support@duetonight.app', vapidPublicKey, vapidPrivateKey);
-}
-else {
-    console.warn('Warning: VAPID keys not configured in backend environment.');
-}
+
+const supabaseUrl = process.env.SUPABASE_URL || 'https://tdotndrapfawgljyzrkn.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkb3RuZHJhcGZhd2dsanl6cmtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3NzYzNTQsImV4cCI6MjA5NDM1MjM1NH0.eGmy70EUcoAtqixypn6_eZMvGziXtNmLTj3sPbsYNQU';
+
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || 'BJD0k-xLMppRIu6ARcTQVCpO17S-ZVS-TW6AgyCDOqX7Lzl_yQY1v4eeWGodRHibzSGaodeYtjid8lSU2qKIDVI';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || 'fkb_Wjq4Dvt75gvG_mKUKWI0yNgUmCacRIz7RAukSWM';
+
+web_push_1.default.setVapidDetails('mailto:support@duetonight.app', vapidPublicKey, vapidPrivateKey);
+
+const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseAnonKey);
+
 // POST /api/notifications/notify
 router.post('/notify', async (req, res) => {
     const { roomId, type, title, details, uploaderName, uploaderId } = req.body;
@@ -25,28 +30,32 @@ router.post('/notify', async (req, res) => {
     }
     try {
         console.log(`Notification request received for room ${roomId}, type: ${type}`);
-        // 1. Fetch all members of the room using Prisma raw query to bypass RLS
-        const members = await db_service_1.prisma.$queryRaw `
-      SELECT user_id FROM public.room_members WHERE room_id = ${roomId}::uuid
-    `;
-        if (!members || members.length === 0) {
-            return res.status(200).json({ status: 'No members in room' });
+        
+        // Fetch subscriptions using RPC to bypass RLS
+        const { data: subscriptions, error } = await supabase.rpc(
+            'get_push_subscriptions_for_room',
+            { p_room_id: roomId }
+        );
+
+        if (error) {
+            console.error('Supabase RPC Error:', error);
+            return res.status(500).json({ error: error.message });
         }
-        // 2. Filter out the uploader
-        const recipientIds = members
-            .map((m) => m.user_id)
-            .filter((id) => id !== uploaderId);
-        if (recipientIds.length === 0) {
-            return res.status(200).json({ status: 'No recipients (only uploader is in the room)' });
-        }
-        // 3. Fetch push subscriptions for the recipients
-        const subscriptions = await db_service_1.prisma.$queryRaw `
-      SELECT id, user_id, endpoint, p256dh, auth FROM public.push_subscriptions WHERE user_id = ANY(${recipientIds}::uuid[])
-    `;
+
         if (!subscriptions || subscriptions.length === 0) {
-            return res.status(200).json({ status: 'No active push subscriptions' });
+            return res.status(200).json({ status: 'No subscriptions found for room' });
         }
-        // 4. Send push notifications
+
+        // Filter out the uploader
+        let recipientSubscriptions = subscriptions;
+        if (uploaderId && Array.isArray(subscriptions)) {
+            recipientSubscriptions = subscriptions.filter((sub) => sub.user_id && sub.user_id !== uploaderId);
+        }
+
+        if (recipientSubscriptions.length === 0) {
+            return res.status(200).json({ status: 'No recipients to notify (only uploader subscribed)' });
+        }
+
         let notificationTitle = `${uploaderName} uploaded a new ${type}`;
         if (type === 'assignment') {
             notificationTitle = `New Assignment from ${uploaderName}`;
@@ -72,8 +81,10 @@ router.post('/notify', async (req, res) => {
             body: `${title}${details ? ': ' + details : ''}`,
             url: targetUrl
         });
-        console.log(`Broadcasting push notification to ${subscriptions.length} subscriptions...`);
-        const promises = subscriptions.map(async (sub) => {
+
+        console.log(`Broadcasting push notification to ${recipientSubscriptions.length} subscriptions...`);
+        const deleteIds = [];
+        const promises = recipientSubscriptions.map(async (sub) => {
             const pushSubscription = {
                 endpoint: sub.endpoint,
                 keys: {
@@ -83,24 +94,28 @@ router.post('/notify', async (req, res) => {
             };
             try {
                 await web_push_1.default.sendNotification(pushSubscription, payload);
-            }
-            catch (err) {
-                console.error(`Failed to send notification to subscription ${sub.id}:`, err.message);
-                // If subscription is expired or unsubscribed, remove it from the DB
+            } catch (err) {
+                console.error(`Failed push delivery to subscription ${sub.id}:`, err.message);
                 if (err.statusCode === 410 || err.statusCode === 404) {
-                    console.log(`Deleting expired subscription: ${sub.id}`);
-                    await db_service_1.prisma.$queryRaw `
-            DELETE FROM public.push_subscriptions WHERE id = ${sub.id}::uuid
-          `;
+                    deleteIds.push(sub.id);
                 }
             }
         });
+
         await Promise.all(promises);
-        return res.status(200).json({ status: 'Notifications sent successfully' });
-    }
-    catch (error) {
+
+        if (deleteIds.length > 0) {
+            await supabase.from('push_subscriptions').delete().in('id', deleteIds);
+        }
+
+        return res.status(200).json({
+            status: 'Notifications sent successfully',
+            deliveredCount: recipientSubscriptions.length - deleteIds.length
+        });
+    } catch (error) {
         console.error('Error sending push notifications:', error);
-        return res.status(500).json({ error: 'Internal server error while sending notifications' });
+        return res.status(500).json({ error: error.message || 'Internal server error' });
     }
 });
+
 exports.default = router;
