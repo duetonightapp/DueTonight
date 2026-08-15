@@ -35,10 +35,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { roomId, type, title, details, uploaderName } = req.body || {};
+  const { roomId, type, title, details, uploaderName, uploaderId } = req.body || {};
 
-  if (!roomId || !type || !title || (type !== 'resource' && !uploaderName)) {
-    return res.status(400).json({ error: 'Missing required parameters (roomId, type, title)' });
+  if (!roomId || !type || !title || !uploaderName) {
+    return res.status(400).json({ error: 'Missing required parameters (roomId, type, title, uploaderName)' });
   }
 
   try {
@@ -55,6 +55,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!subscriptions || subscriptions.length === 0) {
       return res.status(200).json({ status: 'No subscriptions found for room' });
+    }
+
+    let recipientSubscriptions = subscriptions;
+    if (uploaderId && Array.isArray(subscriptions)) {
+      const filtered = subscriptions.filter((sub: any) => sub.user_id && sub.user_id !== uploaderId);
+      if (filtered.length > 0) {
+        recipientSubscriptions = filtered;
+      }
     }
 
     let notificationTitle = uploaderName ? `${uploaderName} posted an update` : 'New Update';
@@ -84,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const deleteIds: string[] = [];
-    const sendPromises = subscriptions.map(async (sub: any) => {
+    const sendPromises = recipientSubscriptions.map(async (sub: any) => {
       try {
         await webpush.sendNotification(
           {

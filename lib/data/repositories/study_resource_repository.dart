@@ -126,6 +126,20 @@ class StudyResourceRepository {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
 
+    String uploaderName = 'Someone';
+    try {
+      final profileRes = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', userId)
+          .maybeSingle();
+      if (profileRes != null && profileRes['full_name'] != null) {
+        uploaderName = profileRes['full_name'] as String;
+      }
+    } catch (e) {
+      debugPrint('Error fetching uploader profile name: $e');
+    }
+
     try {
       String url;
       if (kIsWeb) {
@@ -147,7 +161,7 @@ class StudyResourceRepository {
           'type': 'resource',
           'title': title,
           'details': fileName,
-          'uploaderName': '',
+          'uploaderName': uploaderName,
           'uploaderId': userId,
         }),
       );

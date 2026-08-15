@@ -47,10 +47,30 @@ router.post('/notify', async (req, res) => {
             return res.status(200).json({ status: 'No active push subscriptions' });
         }
         // 4. Send push notifications
+        let notificationTitle = `${uploaderName} uploaded a new ${type}`;
+        if (type === 'assignment') {
+            notificationTitle = `New Assignment from ${uploaderName}`;
+        } else if (type === 'announcement') {
+            notificationTitle = `New Announcement from ${uploaderName}`;
+        } else if (type === 'solution') {
+            notificationTitle = `New Solution from ${uploaderName}`;
+        } else if (type === 'resource') {
+            notificationTitle = `New Resource Uploaded`;
+        }
+
+        let targetUrl = `/rooms/${roomId}`;
+        if (type === 'resource') {
+            targetUrl = `/rooms/${roomId}?initialTab=2`;
+        } else if (type === 'assignment') {
+            targetUrl = `/rooms/${roomId}?initialTab=1`;
+        } else if (type === 'announcement') {
+            targetUrl = `/rooms/${roomId}?initialTab=3`;
+        }
+
         const payload = JSON.stringify({
-            title: `${uploaderName} uploaded a new ${type}`,
+            title: notificationTitle,
             body: `${title}${details ? ': ' + details : ''}`,
-            url: `/rooms/${roomId}`
+            url: targetUrl
         });
         console.log(`Broadcasting push notification to ${subscriptions.length} subscriptions...`);
         const promises = subscriptions.map(async (sub) => {
