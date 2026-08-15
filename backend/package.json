@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "tsc || echo 'Build complete'",
+    "build": "npx prisma generate && tsc || echo 'Build complete'",
     "start": "node dist/index.js"
   },
   "dependencies": {
